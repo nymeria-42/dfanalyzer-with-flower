@@ -44,6 +44,8 @@ COPY data-local.zip /dataflow_analyzer/applications/dfanalyzer/dfa/backup
 COPY data-local.zip /dataflow_analyzer/DfAnalyzer/data-local.zip
 COPY flower-studies /dataflow_analyzer/applications/flower-studies
 COPY pom.xml /dataflow_analyzer/DfAnalyzer/pom.xml
+COPY DbConnection.java /dataflow_analyzer/DfAnalyzer/src/main/java/rest/config/DbConnection.java
+COPY WebConf.java /dataflow_analyzer/DfAnalyzer/src/main/java/rest/server/WebConf.java
 
 EXPOSE 22000
 

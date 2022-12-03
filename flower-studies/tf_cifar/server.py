@@ -14,8 +14,6 @@ from dfa_lib_python.element import Element
 from dfa_lib_python.task_status import TaskStatus
 from dfa_lib_python.extractor_extension import ExtractorExtension
 
-dataflow_tag = "flower-df"
-df = Dataflow(dataflow_tag)
 
 # Training Configuration For Each Round
 def fit_config(server_round: int):
@@ -38,6 +36,8 @@ strategy = FedAvg(fraction_fit=1.0,  # 100% of available clients for training
 server_address="0.0.0.0:8080"
 
 
+dataflow_tag = "flower-df"
+df = Dataflow(dataflow_tag)
 tf1 = Transformation("Config")
 tf1_input = Set("iConfig", SetType.INPUT, 
     [Attribute("ROUNDS", AttributeType.NUMERIC), 
