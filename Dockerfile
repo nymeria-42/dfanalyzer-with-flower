@@ -26,7 +26,7 @@ RUN touch /etc/apt/sources.list.d/monetdb.list && echo "deb [trusted=yes] https:
 RUN git clone  https://gitlab.com/ssvitor/dataflow_analyzer.git && rm dataflow_analyzer/applications/dfanalyzer/dfa/backup/data-local.zip
 
 # instalando fastbit - demora bastante
-RUN git clone https://github.com/berkeleysdm/fastbit/ && cd fastbit && ./configure && make
+# RUN git clone https://github.com/berkeleysdm/fastbit/ && cd fastbit && ./configure && make
 
 ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64
 ENV PATH $JAVA_HOME/bin:$PATH
@@ -34,7 +34,6 @@ ENV M2_HOME /opt/apache-maven-3.5.3
 ENV MAVEN_HOME /opt/apache-maven-3.5.3
 ENV PATH ${M2_HOME}/bin:${PATH}
 
-# RUN mvn -f dataflow_analyzer/DfAnalyzer/pom.xml clean package
 # RUN cd /dataflow_analyzer/maven && ./install_libraries.sh
 # RUN mvn -f dataflow_analyzer/RawDataExtractor/pom.xml clean package
 # RUN mvn -f dataflow_analyzer/DfAnalyzer/pom.xml clean package
@@ -46,6 +45,8 @@ COPY flower-studies /dataflow_analyzer/applications/flower-studies
 COPY pom.xml /dataflow_analyzer/DfAnalyzer/pom.xml
 COPY DbConnection.java /dataflow_analyzer/DfAnalyzer/src/main/java/rest/config/DbConnection.java
 COPY WebConf.java /dataflow_analyzer/DfAnalyzer/src/main/java/rest/server/WebConf.java
+
+RUN mvn -f dataflow_analyzer/DfAnalyzer/pom.xml clean package
 
 EXPOSE 22000
 
