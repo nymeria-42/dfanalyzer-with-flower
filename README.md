@@ -32,7 +32,7 @@ Para iniciar um cliente, rodar em outro terminal:
 
 ```bash
 cd applications/flower-studies/
-python3 tf_cifar/client.py
+python3 dfanalyzer-tf_cifar/client.py
 ```
 
 É possível, então, consultar o banco MonetDB, rodando em outro terminal:
