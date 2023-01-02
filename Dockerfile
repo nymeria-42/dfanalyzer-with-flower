@@ -39,14 +39,19 @@ ENV PATH ${M2_HOME}/bin:${PATH}
 # RUN mvn -f dataflow_analyzer/DfAnalyzer/pom.xml clean package
 # RUN mvn -f dataflow_analyzer/RawDataIndexer/pom.xml clean package
 
-COPY data-local.zip /dataflow_analyzer/applications/dfanalyzer/dfa/backup
-COPY data-local.zip /dataflow_analyzer/DfAnalyzer/data-local.zip
-COPY flower-studies /dataflow_analyzer/applications/flower-studies
-COPY pom.xml /dataflow_analyzer/DfAnalyzer/pom.xml
-COPY DbConnection.java /dataflow_analyzer/DfAnalyzer/src/main/java/rest/config/DbConnection.java
-COPY WebConf.java /dataflow_analyzer/DfAnalyzer/src/main/java/rest/server/WebConf.java
+WORKDIR /dataflow_analyzer
 
-RUN mvn -f dataflow_analyzer/DfAnalyzer/pom.xml clean package
+COPY data-local.zip applications/dfanalyzer/dfa/backup
+COPY data-local.zip DfAnalyzer/data-local.zip
+COPY flower-studies applications/flower-studies
+COPY pom.xml DfAnalyzer/pom.xml
+COPY DbConnection.java DfAnalyzer/src/main/java/rest/config/DbConnection.java
+COPY WebConf.java DfAnalyzer/src/main/java/rest/server/WebConf.java
+
+RUN mvn -f DfAnalyzer/pom.xml clean package
+
+RUN pip install flwr tensorflow
+RUN cd applications/flower-studies && make init
 
 EXPOSE 22000
 
