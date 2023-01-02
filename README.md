@@ -11,7 +11,7 @@ sudo docker run -it -p 22000:22000 --name dfanalyzer_container dfanalyzer bash
 Para iniciar o DfAnalyzer:
 
 ```bash
-cd dataflow_analyzer/Dfanalyzer
+cd Dfanalyzer
 ./start-dfanalyzer.sh
 ```
 
@@ -24,21 +24,14 @@ sudo docker exec -it dfanalyzer_container bash
 Para iniciar o servidor do flower, rodar em outro terminal:
 
 ```bash
-cd dataflow_analyzer/applications/flower-studies
-conda create -n flower-studies
-conda activate flower-studies
-conda install pip
-pip install flwr tensorflow
-make init
-
+cd applications/flower-studies
 python3 dfanalyzer-tf_cifar/server.py
 ```
 
 Para iniciar um cliente, rodar em outro terminal:
 
 ```bash
-cd dataflow_analyzer/applications/flower-studies/
-conda activate flower-studies
+cd applications/flower-studies/
 python3 tf_cifar/client.py
 ```
 
