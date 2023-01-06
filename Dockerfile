@@ -1,17 +1,15 @@
 FROM ubuntu:22.04
 
-# Install prerequisites
-
 #instalando pacotes básicos
 RUN apt-get update && apt-get install -y wget git libcurl4-openssl-dev psmisc zip unzip curl vim
-RUN apt-get install -y build-essential
+RUN apt-get install -y build-essential python3-pip
 
-# instalando miniconda
-ENV CONDA_DIR /opt/conda
-RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh && /bin/bash ~/miniconda.sh -b -p /opt/conda
-ENV PATH=$CONDA_DIR/bin:$PATH
-RUN . /opt/conda/etc/profile.d/conda.sh && conda init bash
-RUN conda config --set auto_activate_base false
+# # instalando miniconda
+# ENV CONDA_DIR /opt/conda
+# RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh && /bin/bash ~/miniconda.sh -b -p /opt/conda
+# ENV PATH=$CONDA_DIR/bin:$PATH
+# RUN . /opt/conda/etc/profile.d/conda.sh && conda init bash
+# RUN conda config --set auto_activate_base false
 
 #instalando java 8
 RUN apt-get install -y openjdk-8-jdk
@@ -25,7 +23,7 @@ RUN touch /etc/apt/sources.list.d/monetdb.list && echo "deb [trusted=yes] https:
 # instalando o dfanalyzer
 RUN git clone  https://gitlab.com/ssvitor/dataflow_analyzer.git && rm dataflow_analyzer/applications/dfanalyzer/dfa/backup/data-local.zip
 
-# instalando fastbit - demora bastante
+# instalando fastbit (demora bastante)
 # RUN git clone https://github.com/berkeleysdm/fastbit/ && cd fastbit && ./configure && make
 
 ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64
@@ -34,24 +32,25 @@ ENV M2_HOME /opt/apache-maven-3.5.3
 ENV MAVEN_HOME /opt/apache-maven-3.5.3
 ENV PATH ${M2_HOME}/bin:${PATH}
 
-# RUN cd /dataflow_analyzer/maven && ./install_libraries.sh
-# RUN mvn -f dataflow_analyzer/RawDataExtractor/pom.xml clean package
-# RUN mvn -f dataflow_analyzer/DfAnalyzer/pom.xml clean package
-# RUN mvn -f dataflow_analyzer/RawDataIndexer/pom.xml clean package
 
 WORKDIR /dataflow_analyzer
 
 COPY data-local.zip applications/dfanalyzer/dfa/backup
 COPY data-local.zip DfAnalyzer/data-local.zip
-COPY flower-studies applications/flower-studies
 COPY pom.xml DfAnalyzer/pom.xml
 COPY DbConnection.java DfAnalyzer/src/main/java/rest/config/DbConnection.java
 COPY WebConf.java DfAnalyzer/src/main/java/rest/server/WebConf.java
+COPY Makefile .
+RUN make init
 
 RUN mvn -f DfAnalyzer/pom.xml clean package
+RUN cd maven && ./install_libraries.sh
+RUN mvn -f RawDataExtractor/pom.xml clean package
+RUN mvn -f RawDataIndexer/pom.xml clean package
 
 RUN pip install flwr tensorflow
-RUN cd applications/flower-studies && make init
+
+VOLUME ["/dataflow_analyzer/applications/flower-studies", "/dataflow_analyzer/applications/flowering"]
 
 EXPOSE 22000
 

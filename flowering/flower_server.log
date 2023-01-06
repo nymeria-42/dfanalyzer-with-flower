@@ -1,0 +1,3 @@
+2023/01/06 02:59:51.680 INFO: [Server 0] Current FL Round: 1
+2023/01/06 03:01:50.480 INFO: [Server 0 | FL Round 1 | 1 Client] Aggregated Training Metrics (Weighted Average): {'fit_time': 118.525727799999, 'loss': 1.8692777156829834, 'sparse_categorical_accuracy': 0.31773999333381653}
+2023/01/06 03:01:56.407 INFO: [Server 0 | FL Round 1 | 1 Client] Aggregated Testing Metrics (Weighted Average): {'sparse_categorical_accuracy': 0.10000000149011612, 'evaluate_time': 5.778516200000013, 'loss': 2.398341417312622}

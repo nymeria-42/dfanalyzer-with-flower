@@ -5,7 +5,7 @@ A partir da pasta contendo Dockerfile e arquivos a serem copiados para o contain
 ```bash
 sudo service docker start
 sudo docker build -t dfanalyzer .
-sudo docker run -it -p 22000:22000 --name dfanalyzer_container dfanalyzer bash 
+sudo docker run -it -p 22000:22000 -v $PWD/flower-studies:/dataflow_analyzer/applications/flower-studies -v $PWD/flowering:/dataflow_analyzer/applications/flowering --name dfanalyzer_container dfanalyzer bash
 ```
 
 Para iniciar o DfAnalyzer:
