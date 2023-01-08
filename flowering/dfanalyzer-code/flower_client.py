@@ -84,7 +84,7 @@ class Client(NumPyClient):
         t3 = Task(7, dataflow_tag, "ClientTraining")
         t3.begin()
         attributes = ["client_id", "server_round", "size_x_train", "global_model_current_parameters", "time_receiving"]
-        to_dfanalyzer = [self.client_id, fit_config["fl_round"], len(self.x_train), str(global_model_current_parameters)[:200], time.ctime()]
+        to_dfanalyzer = [self.client_id, fit_config["fl_round"], len(self.x_train), str(global_model_current_parameters), time.ctime()]
         t3_input= DataSet("iClientTraining", [Element(to_dfanalyzer)])
         t3.add_dataset(t3_input)
         
@@ -131,7 +131,7 @@ class Client(NumPyClient):
             training_metrics[metric_name] = training_metrics_history.history[metric_name][-1]
 
         attributes = ["client_id", "server_round", "training_time", "training_metrics_name", "training_metrics_value", "local_weights", "time_end_training"]
-        to_dfanalyzer = [self.client_id, fit_config["fl_round"], fit_time_end, "SparseCategoricalAccuracy", training_metrics[metric_name], str(self.get_parameters(fit_config))[:200], time.ctime()]
+        to_dfanalyzer = [self.client_id, fit_config["fl_round"], fit_time_end, "SparseCategoricalAccuracy", training_metrics[metric_name], str(self.get_parameters(fit_config)), time.ctime()]
         t3_output= DataSet("oClientTraining", [Element(to_dfanalyzer)])
         t3.add_dataset(t3_output)
         t3.end()
