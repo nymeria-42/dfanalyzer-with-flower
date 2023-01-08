@@ -16,6 +16,19 @@ from re import findall
 from time import perf_counter
 from typing import Any, Optional, Tuple
 
+from dfa_lib_python.dataflow import Dataflow
+from dfa_lib_python.transformation import Transformation
+from dfa_lib_python.attribute import Attribute
+from dfa_lib_python.attribute_type import AttributeType
+from dfa_lib_python.set import Set
+from dfa_lib_python.set_type import SetType
+from dfa_lib_python.task import Task
+from dfa_lib_python.dataset import DataSet
+from dfa_lib_python.element import Element
+from dfa_lib_python.task_status import TaskStatus
+from dfa_lib_python.extractor_extension import ExtractorExtension
+import time
+dataflow_tag = "flower-df"
 
 class Client(NumPyClient):
 
@@ -66,6 +79,16 @@ class Client(NumPyClient):
             fit_config: dict) -> Tuple[NDArrays, int, dict]:
         # Update the Local Model With the Global Model's Current Parameters (Weights).
         self.model.set_weights(global_model_current_parameters)
+
+
+        t3 = Task(7, dataflow_tag, "ClientTraining")
+        t3.begin()
+        attributes = ["client_id", "server_round", "size_x_train", "global_model_current_parameters", "time_receiving"]
+        to_dfanalyzer = [self.client_id, fit_config["fl_round"], len(self.x_train), str(global_model_current_parameters)[:200], time.ctime()]
+        t3_input= DataSet("iClientTraining", [Element(to_dfanalyzer)])
+        t3.add_dataset(t3_input)
+        
+
         # Replace All "None" String Values with None Type (Necessary Workaround on Flower v1.1.0).
         fit_config = {k: (None if v == "None" else v) for k, v in fit_config.items()}
         # Log the Training Configuration Received from the Server (If Logger is Enabled for "DEBUG" Level).
@@ -91,6 +114,7 @@ class Client(NumPyClient):
                                                   validation_batch_size=fit_config["validation_batch_size"])
         # Get the Fit Time in Seconds (Fitting Duration).
         fit_time_end = perf_counter() - fit_time_start
+
         # Log the Fit Ending Time (If Logger is Enabled for "INFO" Level).
         message = "[Client {0} | FL Round {1}] Finished Fitting the Model in {2} Seconds." \
             .format(self.client_id,
@@ -105,6 +129,13 @@ class Client(NumPyClient):
         training_metrics = {}
         for metric_name in self.model.metrics_names:
             training_metrics[metric_name] = training_metrics_history.history[metric_name][-1]
+
+        attributes = ["client_id", "server_round", "training_time", "training_metrics_name", "training_metrics_value", "local_weights", "time_end_training"]
+        to_dfanalyzer = [self.client_id, fit_config["fl_round"], fit_time_end, "SparseCategoricalAccuracy", training_metrics[metric_name], str(self.get_parameters(fit_config))[:200], time.ctime()]
+        t3_output= DataSet("oClientTraining", [Element(to_dfanalyzer)])
+        t3.add_dataset(t3_output)
+        t3.end()
+        
         # Add the Fit Time to the Training Metrics.
         training_metrics.update({"fit_time": fit_time_end})
         # Return the Model's Local Weights, Number of Training Examples, and Training Metrics to be Sent to the Server.
@@ -489,7 +520,17 @@ def main() -> None:
     # Compile ML Model.
     fc.compile_ml_model()
     # Load and Set ML Model's Local Data (x_train, y_train, x_test, y_test).
+    t5 = Task(5, dataflow_tag, "DatasetLoad")
+    t5.begin()
+    start = perf_counter()
+
     local_data = fc.load_ml_model_local_data()
+    
+    end = perf_counter()
+    to_dfanalyzer = [end-start]
+    t5_output= DataSet("oDatasetLoad", [Element(to_dfanalyzer)])
+    t5.add_dataset(t5_output)
+    t5.end()
     fc.set_attribute("x_train", local_data[0])
     fc.set_attribute("y_train", local_data[1])
     fc.set_attribute("x_test", local_data[2])

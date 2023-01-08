@@ -19,6 +19,7 @@ from dfa_lib_python.dataset import DataSet
 from dfa_lib_python.element import Element
 from dfa_lib_python.task_status import TaskStatus
 from dfa_lib_python.extractor_extension import ExtractorExtension
+import time
 
 dataflow_tag = "flower-df"
 
@@ -216,14 +217,6 @@ class FlowerServer:
         # Get the Training Hyper-parameters Settings.
         training_hyper_parameters_settings = self.get_attribute("training_hyper_parameters_settings")
         # Replace All Values of None Type to "None" String (Necessary Workaround on Flower v1.1.0).
-        t3 = Task(3, dataflow_tag, "TrainingConfig")
-        t3.begin()
-        attributes = ["shuffle", "batch_size", "initial_epoch", "epochs", "steps_per_epoch", "validation_split","validation_batch_size"]
-        to_dfanalyzer = [fl_round] + [training_hyper_parameters_settings.get(attr, 0) for attr in attributes]
-
-        t3_output= DataSet("oTrainingConfig", [Element(to_dfanalyzer)])
-        t3.add_dataset(t3_output)
-        t3.end()
         training_hyper_parameters_settings = \
             {k: ("None" if v is None else v) for k, v in training_hyper_parameters_settings.items()}
         # Set the Training Configuration to be Sent to All Participating Clients.
@@ -234,6 +227,14 @@ class FlowerServer:
                                                                        fit_config["fl_round"],
                                                                        fit_config)
         self.log_message(message, "DEBUG")
+        t3 = Task(3, dataflow_tag, "TrainingConfig")
+        t3.begin()
+        attributes = ["shuffle", "batch_size", "initial_epoch", "epochs", "steps_per_epoch", "validation_split","validation_batch_size"]
+        to_dfanalyzer = [fl_round, time.ctime()] + [training_hyper_parameters_settings.get(attr, 0) for attr in attributes]
+
+        t3_output= DataSet("oTrainingConfig", [Element(to_dfanalyzer)])
+        t3.add_dataset(t3_output)
+        t3.end()
         # Return the Training Configuration to be Sent to All Participating Clients.
         return fit_config
 
@@ -253,6 +254,15 @@ class FlowerServer:
                                                                             evaluate_config["fl_round"],
                                                                             evaluate_config)
         self.log_message(message, "DEBUG")
+        
+        t4 = Task(4, dataflow_tag, "TestConfig")
+        t4.begin()
+        attributes = ["batch_size", "steps"]
+        to_dfanalyzer = [testing_hyper_parameters_settings.get(attr, 0) for attr in attributes]
+
+        t4_output= DataSet("oTestConfig", [Element(to_dfanalyzer)])
+        t4.add_dataset(t4_output)
+        t4.end()                                                                   
         # Return the Testing Configuration to be Sent to All Participating Clients.
         return evaluate_config
 
@@ -441,7 +451,7 @@ def main() -> None:
         Attribute("max_message_length_in_bytes", AttributeType.TEXT),
         Attribute("num_rounds", AttributeType.NUMERIC), 
         Attribute("round_timeout_in_seconds", AttributeType.NUMERIC),
-        Attribute("accept_rounds_containing_failures", AttributeType.TEXT),
+        Attribute("accept_rounds_with_failures", AttributeType.TEXT),
         Attribute("enable_ssl", AttributeType.TEXT),
         Attribute("server_aggregation_strategy", AttributeType.TEXT),
         Attribute("fraction_fit", AttributeType.NUMERIC),
@@ -465,6 +475,7 @@ def main() -> None:
     tf3 = Transformation("TrainingConfig")
     tf3_output = Set("oTrainingConfig", SetType.OUTPUT, 
         [Attribute("server_round", AttributeType.NUMERIC),
+        Attribute("time_sending", AttributeType.TEXT),
         Attribute("shuffle", AttributeType.TEXT),
         Attribute("batch_size", AttributeType.NUMERIC),
         Attribute("initial_epoch", AttributeType.NUMERIC),
@@ -492,36 +503,37 @@ def main() -> None:
 
     tf5 = Transformation("DatasetLoad")
     tf5_output = Set("oDatasetLoad", SetType.OUTPUT, 
-        [])
+        [Attribute("loading_time", AttributeType.TEXT)])
     tf5.set_sets([tf5_output])
     df.add_transformation(tf5)
 
     tf6 = Transformation("ModelConfig")
     tf6_output = Set("oModelConfig", SetType.OUTPUT, 
-        [Attribute("model", AttributeType.TEXT),
-        Attribute("optimizer", AttributeType.TEXT),
-        Attribute("loss_function", AttributeType.TEXT),
-        Attribute("loss_weights", AttributeType.TEXT),
-        Attribute("weighted_metrics", AttributeType.TEXT),
-        Attribute("run_eagerly", AttributeType.TEXT),
-        Attribute("steps_per_execution", AttributeType.NUMERIC),
-        Attribute("jit_compile", AttributeType.TEXT),
-        Attribute("input_shape", AttributeType.TEXT),
-        Attribute("alpha", AttributeType.NUMERIC),
-        Attribute("include_top", AttributeType.TEXT),
-        Attribute("weights", AttributeType.TEXT),
-        Attribute("input_tensor", AttributeType.TEXT),
-        Attribute("pooling", AttributeType.TEXT),
-        Attribute("classes", AttributeType.NUMERIC),
-        Attribute("classifier_activation", AttributeType.TEXT),
-        Attribute("learning_rate", AttributeType.NUMERIC),
-        Attribute("momentum", AttributeType.NUMERIC),
-        Attribute("nesterov", AttributeType.TEXT),
-        Attribute("name_sgd", AttributeType.TEXT),
-        Attribute("from_logits", AttributeType.TEXT),
-        Attribute("ignore_class", AttributeType.TEXT),
-        Attribute("reduction", AttributeType.TEXT),
-        Attribute("name", AttributeType.TEXT)])
+    [])
+        # [Attribute("model", AttributeType.TEXT),
+        # Attribute("optimizer", AttributeType.TEXT),
+        # Attribute("loss_function", AttributeType.TEXT),
+        # Attribute("loss_weights", AttributeType.TEXT),
+        # Attribute("weighted_metrics", AttributeType.TEXT),
+        # Attribute("run_eagerly", AttributeType.TEXT),
+        # Attribute("steps_per_execution", AttributeType.NUMERIC),
+        # Attribute("jit_compile", AttributeType.TEXT),
+        # Attribute("input_shape", AttributeType.TEXT),
+        # Attribute("alpha", AttributeType.NUMERIC),
+        # Attribute("include_top", AttributeType.TEXT),
+        # Attribute("weights", AttributeType.TEXT),
+        # Attribute("input_tensor", AttributeType.TEXT),
+        # Attribute("pooling", AttributeType.TEXT),
+        # Attribute("classes", AttributeType.NUMERIC),
+        # Attribute("classifier_activation", AttributeType.TEXT),
+        # Attribute("learning_rate", AttributeType.NUMERIC),
+        # Attribute("momentum", AttributeType.NUMERIC),
+        # Attribute("nesterov", AttributeType.TEXT),
+        # Attribute("name_sgd", AttributeType.TEXT),
+        # Attribute("from_logits", AttributeType.TEXT),
+        # Attribute("ignore_class", AttributeType.TEXT),
+        # Attribute("reduction", AttributeType.TEXT),
+        # Attribute("name", AttributeType.TEXT)])
     tf6.set_sets([tf6_output])
     df.add_transformation(tf6)
 
@@ -529,11 +541,18 @@ def main() -> None:
     tf7_input = Set("iClientTraining", SetType.INPUT, 
         [Attribute("client_id", AttributeType.NUMERIC),
         Attribute("server_round", AttributeType.NUMERIC),
-        Attribute("size_x_train", AttributeType.NUMERIC)
+        Attribute("size_x_train", AttributeType.NUMERIC),
+        Attribute("global_current_parameters", AttributeType.TEXT),
+        Attribute("time_receiving", AttributeType.TEXT),
         ])
     tf7_output = Set("oClientTraining", SetType.OUTPUT, 
         [Attribute("client_id", AttributeType.NUMERIC),
-        Attribute("training_time", AttributeType.NUMERIC)])
+        Attribute("server_round", AttributeType.NUMERIC),
+        Attribute("training_time", AttributeType.NUMERIC),
+        Attribute("training_metrics_name", AttributeType.TEXT),
+        Attribute("training_metrics_value", AttributeType.NUMERIC),
+        Attribute("local_weights", AttributeType.TEXT),
+        Attribute("time_end_training", AttributeType.TEXT)])
 
     tf3_output.set_type(SetType.INPUT)
     tf3_output.dependency=tf3._tag
@@ -554,7 +573,7 @@ def main() -> None:
     tf8_output = Set("oClientEvaluation", SetType.OUTPUT, 
         [Attribute("client_id", AttributeType.NUMERIC),
         Attribute("loss", AttributeType.NUMERIC),
-        Attribute("accuracy", AttributeType.NUMERIC),
+        Attribute("metric", AttributeType.NUMERIC),
         Attribute("evaluation_time", AttributeType.NUMERIC)])
 
     tf7_output.set_type(SetType.INPUT)
@@ -570,7 +589,7 @@ def main() -> None:
     tf9_input = Set("iServerEvaluation", SetType.INPUT, 
         [])
     tf9_output = Set("oServerEvaluation", SetType.OUTPUT, 
-        [])
+        [Attribute("aggregated_metrics", AttributeType.TEXT)])
 
     tf8_output.set_type(SetType.INPUT)
     tf8_output.dependency=tf8._tag
