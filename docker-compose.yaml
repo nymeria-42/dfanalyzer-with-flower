@@ -20,7 +20,7 @@ services:
     environment:
       - DFA_URL=http://dfanalyzer:22000
     ports: 
-     - 8081:8081
+     - 8082:8082
     volumes: 
       - ./flowering:/dataflow_analyzer/applications/flowering
     # working_dir: "/dataflow_analyzer/DfAnalyzer"

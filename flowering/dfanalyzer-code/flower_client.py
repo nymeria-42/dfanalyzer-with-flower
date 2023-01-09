@@ -81,12 +81,12 @@ class Client(NumPyClient):
         self.model.set_weights(global_model_current_parameters)
 
 
-        t3 = Task(7, dataflow_tag, "ClientTraining")
-        t3.begin()
+        t7 = Task(7, dataflow_tag, "ClientTraining")
+        t7.begin()
         attributes = ["client_id", "server_round", "size_x_train", "global_model_current_parameters", "time_receiving"]
         to_dfanalyzer = [self.client_id, fit_config["fl_round"], len(self.x_train), str(global_model_current_parameters), time.ctime()]
-        t3_input= DataSet("iClientTraining", [Element(to_dfanalyzer)])
-        t3.add_dataset(t3_input)
+        t7_input= DataSet("iClientTraining", [Element(to_dfanalyzer)])
+        t7.add_dataset(t7_input)
         
 
         # Replace All "None" String Values with None Type (Necessary Workaround on Flower v1.1.0).
@@ -132,9 +132,9 @@ class Client(NumPyClient):
 
         attributes = ["client_id", "server_round", "training_time", "training_metrics_name", "training_metrics_value", "local_weights", "time_end_training"]
         to_dfanalyzer = [self.client_id, fit_config["fl_round"], fit_time_end, "SparseCategoricalAccuracy", training_metrics[metric_name], str(self.get_parameters(fit_config)), time.ctime()]
-        t3_output= DataSet("oClientTraining", [Element(to_dfanalyzer)])
-        t3.add_dataset(t3_output)
-        t3.end()
+        t7_output= DataSet("oClientTraining", [Element(to_dfanalyzer)])
+        t7.add_dataset(t7_output)
+        t7.end()
         
         # Add the Fit Time to the Training Metrics.
         training_metrics.update({"fit_time": fit_time_end})
@@ -157,6 +157,14 @@ class Client(NumPyClient):
         message = "[Client {0} | FL Round {1}] Evaluating the Model...".format(self.client_id,
                                                                                evaluate_config["fl_round"])
         self.log_message(message, "INFO")
+
+        t8 = Task(8, dataflow_tag, "ClientEvaluation")
+        t8.begin()
+        attributes = ["client_id", "num_testing_examples", "time_receiving"]
+        to_dfanalyzer = [self.client_id, len(self.x_test), time.ctime()]
+        t8_input= DataSet("iClientEvaluation", [Element(to_dfanalyzer)])
+        t8.add_dataset(t8_input)
+
         # Start the Evaluate Model Timer.
         evaluate_time_start = perf_counter()
         # Evaluate the Local Updated Model With the Local Testing Dataset.
@@ -180,6 +188,12 @@ class Client(NumPyClient):
         for metric_name in self.model.metrics_names:
             testing_metrics[metric_name] = testing_metrics_history[metric_index]
             metric_index += 1
+    
+        attributes = ["client_id", "loss", "evaluation_time", "training_metrics_name", "training_metrics_value", "time_end_evaluation"]
+        to_dfanalyzer = [self.client_id, testing_metrics["loss"], evaluate_time_end, "SparseCategoricalAccuracy", testing_metrics[metric_name], time.ctime()]
+        t8_output= DataSet("oClientEvaluation", [Element(to_dfanalyzer)])
+        t8.add_dataset(t8_output)
+        t8.end()
         # Add the Evaluate Time to the Testing Metrics.
         testing_metrics.update({"evaluate_time": evaluate_time_end})
         # Get the Loss Metric.
@@ -336,6 +350,11 @@ class FlowerClient:
         cp.read(filenames=client_config_file, encoding="utf-8")
         ml_model_settings = self.get_attribute("ml_model_settings")
         ml_model = None
+        t6 = Task(6, dataflow_tag, "ModelConfig")
+        t6.begin()
+        attributes = ["model", "optimizer", "loss_function", "loss_weights", "weighted_metrics", "run_eagerly", "steps_per_execution", "jit_compile"]
+        to_dfanalyzer = [ml_model_settings.get(attr, 0) for attr in attributes]
+        
         if ml_model_settings["model"] == "MobileNetV2":
             # Parse 'MobileNetV2 Settings'.
             mobilenet_v2_settings = self.parse_config_section(cp, "MobileNetV2 Settings")
@@ -348,6 +367,14 @@ class FlowerClient:
                                    pooling=mobilenet_v2_settings["pooling"],
                                    classes=mobilenet_v2_settings["classes"],
                                    classifier_activation=mobilenet_v2_settings["classifier_activation"])
+            attributes = ["input_shape", "alpha", "include_top", "weights", "input_tensor", "pooling", "classes", "classifier_activation"]
+            to_dfanalyzer +=[mobilenet_v2_settings.get(attr, None) for attr in attributes]
+   
+        else:
+            to_dfanalyzer += [None, 0, None, None, None, None, 0, None]
+        t6_output= DataSet("oModelConfig", [Element(to_dfanalyzer)])
+        t6.add_dataset(t6_output)
+        t6.end()
         # Unbind ConfigParser Object (Garbage Collector).
         del cp
         return ml_model
@@ -361,6 +388,8 @@ class FlowerClient:
         cp.read(filenames=client_config_file, encoding="utf-8")
         ml_model_settings = self.get_attribute("ml_model_settings")
         ml_model_optimizer = None
+        t7 = Task(7, dataflow_tag, "SGDConfig")
+        t7.begin()
         if ml_model_settings["optimizer"] == "SGD":
             # Parse 'SGD Settings'.
             sgd_settings = self.parse_config_section(cp, "SGD Settings")
@@ -369,6 +398,12 @@ class FlowerClient:
                                      momentum=sgd_settings["momentum"],
                                      nesterov=sgd_settings["nesterov"],
                                      name=sgd_settings["name"])
+            attributes = ["learning_rate", "momentum", "nesterov", "name"]
+            to_dfanalyzer = [sgd_settings.get(attr, None) for attr in attributes]
+            t7_output= DataSet("oSGDConfig", [Element(to_dfanalyzer)])
+            t7.add_dataset(t7_output)
+
+        t7.end()          
         # Unbind ConfigParser Object (Garbage Collector).
         del cp
         return ml_model_optimizer
@@ -382,6 +417,8 @@ class FlowerClient:
         cp.read(filenames=client_config_file, encoding="utf-8")
         ml_model_settings = self.get_attribute("ml_model_settings")
         ml_model_loss_function = None
+        t8 = Task(8, dataflow_tag, "LossConfig")
+        t8.begin()
         if ml_model_settings["loss_function"] == "SparseCategoricalCrossentropy":
             # Parse 'SparseCategoricalCrossentropy Settings'.
             scc_settings = self.parse_config_section(cp, "SparseCategoricalCrossentropy Settings")
@@ -390,6 +427,12 @@ class FlowerClient:
                                                                    ignore_class=scc_settings["ignore_class"],
                                                                    reduction=scc_settings["reduction"],
                                                                    name=scc_settings["name"])
+            attributes = ["from_logits", "ignore_class", "reduction", "name"]
+            to_dfanalyzer = [scc_settings.get(attr, None) for attr in attributes]
+            t8_output= DataSet("oLossConfig", [Element(to_dfanalyzer)])
+            t8.add_dataset(t8_output)
+
+        t8.end()   
         # Unbind ConfigParser Object (Garbage Collector).
         del cp
         return ml_model_loss_function

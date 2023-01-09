@@ -40,8 +40,8 @@ ENV PATH ${M2_HOME}/bin:${PATH}
 
 WORKDIR /dataflow_analyzer
 
-# Copy files that provides fixes to usage of DfAnalyzer with the latest version of MonetDB
-COPY ["DfAnalyzer/pom.xml", "DfAnalyzer/data-local.zip", "DfAnalyzer/src/main/java/rest/config/DbConnection.java", "DfAnalyzer/src/main/java/rest/server/WebConf.java", "DfAnalyzer/"] 
+# Copy files that provides fixes to usage of DfAnalyzer with the latest version of MonetDB and bigger upperbound limit to attribute text
+COPY ["DfAnalyzer/pom.xml", "DfAnalyzer/data-local.zip", "DfAnalyzer/src/main/java/rest/config/DbConnection.java", "DfAnalyzer/src/main/java/rest/server/WebConf.java", "DfAnalyzer/src/main/java/di/provenance/DataflowProvenance.java", "DfAnalyzer/"] 
 
 # Prepare DfAnalyzer to be executed
 RUN mvn -f DfAnalyzer/pom.xml clean package \
