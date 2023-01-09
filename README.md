@@ -1,44 +1,36 @@
-# DfAnalyzer
+# Flower-DfAnalyzer
 
-A partir da pasta contendo Dockerfile e arquivos a serem copiados para o container:
+A partir da pasta contendo Dockerfile e arquivos a serem copiados para o container, constuir a imagem rodando:
 
 ```bash
 sudo service docker start
 sudo docker build -t dfanalyzer .
-sudo docker run -it -p 22000:22000 -v $PWD/flower-studies:/dataflow_analyzer/applications/flower-studies -v $PWD/flowering:/dataflow_analyzer/applications/flowering --name dfanalyzer_container dfanalyzer bash
 ```
 
 Para iniciar o DfAnalyzer:
 
 ```bash
-cd Dfanalyzer
-./start-dfanalyzer.sh
+sudo docker-compose up dfanalyzer
 ```
 
-Para acessar o container criado:
+Para iniciar o servidor do flower:
 
 ```bash
-sudo docker exec -it dfanalyzer_container bash
+sudo docker-compose up server
 ```
 
-Para iniciar o servidor do flower, rodar em outro terminal:
+Para iniciar um cliente:
 
 ```bash
-cd applications/flower-studies
-python3 dfanalyzer-tf_cifar/server.py
+sudo docker-compose up client
 ```
 
-Para iniciar um cliente, rodar em outro terminal:
+É possível, então, consultar o banco MonetDB, acessando o container rodando o DfAnalyzer em outro terminal:
 
 ```bash
-cd applications/flower-studies/
-python3 dfanalyzer-tf_cifar/client.py
-```
+sudo docker exec -it dfanalyzer
 
-É possível, então, consultar o banco MonetDB, rodando em outro terminal:
-
-```bash
-mclient -u monetdb -dataflow_analyzer
+mclient -u monetdb -d dataflow_analyzer
 #password: monetdb
 ```
 
@@ -51,6 +43,6 @@ SELECT tables.name FROM tables WHERE tables.system=false ;
 Para ver a interface web do DfAnalyzer, acessar [`http://localhost:22000`](http://localhost:22000/)
 
 - É possível visualizar o grafo com as tasks do workflow executado.
-- OBS: queries pela interface gráfica não estão funcionando.
+- OBS: queries pela interface gráfica não estão funcionais.
 
 Link do repositório do DfAnalyzer: [`https://gitlab.com/ssvitor/dataflow_analyzer`](https://gitlab.com/ssvitor/dataflow_analyzer)

@@ -2,6 +2,7 @@ version: "2"
 services:
   dfanalyzer:
     image: dfanalyzer
+    container_name: dfanalyzer
     restart: always
     networks: 
       - network 
