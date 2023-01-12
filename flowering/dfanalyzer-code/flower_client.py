@@ -3,6 +3,7 @@ from configparser import ConfigParser
 from flwr.client import NumPyClient, start_numpy_client
 from flwr.common import NDArray, NDArrays
 from os import environ
+
 environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 from keras.models import Model
 from keras.applications import MobileNetV2
@@ -29,18 +30,21 @@ from dfa_lib_python.element import Element
 from dfa_lib_python.task_status import TaskStatus
 from dfa_lib_python.extractor_extension import ExtractorExtension
 import time
+
 dataflow_tag = "flower-df"
 
-class Client(NumPyClient):
 
-    def __init__(self,
-                 client_id: int,
-                 model: Model,
-                 x_train: NDArray,
-                 y_train: NDArray,
-                 x_test: NDArray,
-                 y_test: NDArray,
-                 logger: Logger) -> None:
+class Client(NumPyClient):
+    def __init__(
+        self,
+        client_id: int,
+        model: Model,
+        x_train: NDArray,
+        y_train: NDArray,
+        x_test: NDArray,
+        y_test: NDArray,
+        logger: Logger,
+    ) -> None:
         self.client_id = client_id
         self.model = model
         self.x_train = x_train
@@ -49,9 +53,7 @@ class Client(NumPyClient):
         self.y_test = y_test
         self.logger = logger
 
-    def log_message(self,
-                    message: str,
-                    message_level: str) -> None:
+    def log_message(self, message: str, message_level: str) -> None:
         logger = self.logger
         if logger and getLevelName(logger.getEffectiveLevel()) != "NOTSET":
             if message_level == "DEBUG":
@@ -65,65 +67,79 @@ class Client(NumPyClient):
             elif message_level == "CRITICAL":
                 logger.critical(msg=message)
 
-    def get_properties(self,
-                       config: dict) -> dict:
+    def get_properties(self, config: dict) -> dict:
         # TODO: To Implement (If Ever Needed)...
         pass
 
-    def get_parameters(self,
-                       config: dict) -> NDArrays:
+    def get_parameters(self, config: dict) -> NDArrays:
         # Return the Local Model's Current Parameters (Weights).
         return self.model.get_weights()
 
-    def fit(self,
-            global_model_current_parameters: NDArrays,
-            fit_config: dict) -> Tuple[NDArrays, int, dict]:
+    def fit(
+        self, global_model_current_parameters: NDArrays, fit_config: dict
+    ) -> Tuple[NDArrays, int, dict]:
         # Update the Local Model With the Global Model's Current Parameters (Weights).
         self.model.set_weights(global_model_current_parameters)
 
+        t8 = Task(8 + 6 * (fit_config["fl_round"] - 1), dataflow_tag, "ClientTraining")
+        t8.add_dependency(
+            Dependency(
+                [
+                    "modelconfig",
+                    "optimizerconfig",
+                    "lossconfig",
+                    "datasetload",
+                    "trainingconfig",
+                ],
+                ["3", "4", "5", "6", "7"],
+            )
+        )
 
-        t8 = Task(8, dataflow_tag, "ClientTraining") 
-        t8.add_dependency(Dependency(["modelconfig", "optimizerconfig", "lossconfig", "datasetload", "trainingconfig"], ["3", "4", "5", "6", "7"]))
-
-        
         t8.begin()
-        attributes = ["client_id", "server_round", "size_x_train", "global_model_current_parameters", "time_receiving"]
-        to_dfanalyzer = [self.client_id, fit_config["fl_round"], len(self.x_train), str(global_model_current_parameters)[:10000], time.ctime()]
-        t8_input= DataSet("iClientTraining", [Element(to_dfanalyzer)])
+
+        to_dfanalyzer = [
+            self.client_id,
+            fit_config["fl_round"],
+            len(self.x_train),
+            str(global_model_current_parameters)[:10000],
+            time.ctime(),
+        ]
+        t8_input = DataSet("iClientTraining", [Element(to_dfanalyzer)])
         t8.add_dataset(t8_input)
-        
 
         # Replace All "None" String Values with None Type (Necessary Workaround on Flower v1.1.0).
         fit_config = {k: (None if v == "None" else v) for k, v in fit_config.items()}
         # Log the Training Configuration Received from the Server (If Logger is Enabled for "DEBUG" Level).
-        message = "[Client {0} | FL Round {1}] Fit Config: {2}".format(self.client_id,
-                                                                       fit_config["fl_round"],
-                                                                       fit_config)
+        message = "[Client {0} | FL Round {1}] Fit Config: {2}".format(
+            self.client_id, fit_config["fl_round"], fit_config
+        )
         self.log_message(message, "DEBUG")
         # Log the Fit Starting Time (If Logger is Enabled for "INFO" Level).
-        message = "[Client {0} | FL Round {1}] Fitting the Model...".format(self.client_id,
-                                                                            fit_config["fl_round"])
+        message = "[Client {0} | FL Round {1}] Fitting the Model...".format(
+            self.client_id, fit_config["fl_round"]
+        )
         self.log_message(message, "INFO")
         # Start the Fit Model Timer.
         fit_time_start = perf_counter()
         # Fit the Local Updated Model With the Local Training Dataset.
-        training_metrics_history = self.model.fit(x=self.x_train,
-                                                  y=self.y_train,
-                                                  shuffle=fit_config["shuffle"],
-                                                  batch_size=fit_config["batch_size"],
-                                                  initial_epoch=fit_config["initial_epoch"],
-                                                  epochs=fit_config["epochs"],
-                                                  steps_per_epoch=fit_config["steps_per_epoch"],
-                                                  validation_split=fit_config["validation_split"],
-                                                  validation_batch_size=fit_config["validation_batch_size"])
+        training_metrics_history = self.model.fit(
+            x=self.x_train,
+            y=self.y_train,
+            shuffle=fit_config["shuffle"],
+            batch_size=fit_config["batch_size"],
+            initial_epoch=fit_config["initial_epoch"],
+            epochs=fit_config["epochs"],
+            steps_per_epoch=fit_config["steps_per_epoch"],
+            validation_split=fit_config["validation_split"],
+            validation_batch_size=fit_config["validation_batch_size"],
+        )
         # Get the Fit Time in Seconds (Fitting Duration).
         fit_time_end = perf_counter() - fit_time_start
 
         # Log the Fit Ending Time (If Logger is Enabled for "INFO" Level).
-        message = "[Client {0} | FL Round {1}] Finished Fitting the Model in {2} Seconds." \
-            .format(self.client_id,
-                    fit_config["fl_round"],
-                    fit_time_end)
+        message = "[Client {0} | FL Round {1}] Finished Fitting the Model in {2} Seconds.".format(
+            self.client_id, fit_config["fl_round"], fit_time_end
+        )
         self.log_message(message, "INFO")
         # Get the Local Model's Current Parameters (Weights).
         weight_tensors_list = self.get_parameters(fit_config)
@@ -132,58 +148,85 @@ class Client(NumPyClient):
         # Get the Last Epoch's Training Metrics.
         training_metrics = {}
         for metric_name in self.model.metrics_names:
-            training_metrics[metric_name] = training_metrics_history.history[metric_name][-1]
+            training_metrics[metric_name] = training_metrics_history.history[
+                metric_name
+            ][-1]
 
-        attributes = ["client_id", "server_round", "training_time", "sparse_categorical_accuracy", "local_weights", "time_end_training"]
-        to_dfanalyzer = [self.client_id, fit_config["fl_round"], fit_time_end, training_metrics[metric_name], str(self.get_parameters(fit_config))[:10000], time.ctime()]
-        t8_output= DataSet("oClientTraining", [Element(to_dfanalyzer)])
+        to_dfanalyzer = [
+            self.client_id,
+            fit_config["fl_round"],
+            fit_time_end,
+            training_metrics[metric_name],
+            str(self.get_parameters(fit_config))[:10000],
+            time.ctime(),
+        ]
+        t8_output = DataSet("oClientTraining", [Element(to_dfanalyzer)])
         t8.add_dataset(t8_output)
         t8.end()
-        
+
         # Add the Fit Time to the Training Metrics.
         training_metrics.update({"fit_time": fit_time_end})
         # Return the Model's Local Weights, Number of Training Examples, and Training Metrics to be Sent to the Server.
         return weight_tensors_list, num_training_examples, training_metrics
 
-    def evaluate(self,
-                 global_model_current_parameters: NDArrays,
-                 evaluate_config: dict) -> Tuple[float, int, dict]:
+    def evaluate(
+        self, global_model_current_parameters: NDArrays, evaluate_config: dict
+    ) -> Tuple[float, int, dict]:
         # Update the Local Model With the Global Model's Current Parameters (Weights).
         self.model.set_weights(global_model_current_parameters)
         # Replace All "None" String Values with None Type (Necessary Workaround on Flower v1.1.0).
-        evaluate_config = {k: (None if v == "None" else v) for k, v in evaluate_config.items()}
+        evaluate_config = {
+            k: (None if v == "None" else v) for k, v in evaluate_config.items()
+        }
         # Log the Testing Configuration Received from the Server (If Logger is Enabled for "DEBUG" Level).
-        message = "[Client {0} | FL Round {1}] Evaluate Config: {2}".format(self.client_id,
-                                                                            evaluate_config["fl_round"],
-                                                                            evaluate_config)
+        message = "[Client {0} | FL Round {1}] Evaluate Config: {2}".format(
+            self.client_id, evaluate_config["fl_round"], evaluate_config
+        )
         self.log_message(message, "DEBUG")
         # Log the Evaluate Starting Time (If Logger is Enabled for "INFO" Level).
-        message = "[Client {0} | FL Round {1}] Evaluating the Model...".format(self.client_id,
-                                                                               evaluate_config["fl_round"])
+        message = "[Client {0} | FL Round {1}] Evaluating the Model...".format(
+            self.client_id, evaluate_config["fl_round"]
+        )
         self.log_message(message, "INFO")
 
-        t11 = Task(11, dataflow_tag, "ClientEvaluation")
-        t11.add_dependency(Dependency(["servertrainingaggregation"], [str(9)]))
-        t11.add_dependency(Dependency(["testconfig"], [str(10)]))
+        t11 = Task(
+            11 + 6 * (evaluate_config["fl_round"] - 1), dataflow_tag, "ClientEvaluation"
+        )
+        t11.add_dependency(
+            Dependency(
+                ["servertrainingaggregation", "test_config"],
+                [
+                    str(9 + 6 * (evaluate_config["fl_round"] - 1)),
+                    str(10 + 6 * (evaluate_config["fl_round"] - 1)),
+                ],
+            )
+        )
+
         t11.begin()
-        to_dfanalyzer = [self.client_id,  evaluate_config["fl_round"], len(self.x_test), time.ctime()]
-        t11_input= DataSet("iClientEvaluation", [Element(to_dfanalyzer)])
+        to_dfanalyzer = [
+            self.client_id,
+            evaluate_config["fl_round"],
+            len(self.x_test),
+            time.ctime(),
+        ]
+        t11_input = DataSet("iClientEvaluation", [Element(to_dfanalyzer)])
         t11.add_dataset(t11_input)
 
         # Start the Evaluate Model Timser.
         evaluate_time_start = perf_counter()
         # Evaluate the Local Updated Model With the Local Testing Dataset.
-        testing_metrics_history = self.model.evaluate(x=self.x_test,
-                                                      y=self.y_test,
-                                                      batch_size=evaluate_config["batch_size"],
-                                                      steps=evaluate_config["steps"])
+        testing_metrics_history = self.model.evaluate(
+            x=self.x_test,
+            y=self.y_test,
+            batch_size=evaluate_config["batch_size"],
+            steps=evaluate_config["steps"],
+        )
         # Get the Evaluate Time in Seconds (Evaluating Duration).
         evaluate_time_end = perf_counter() - evaluate_time_start
         # Log the Evaluate Ending Time (If Logger is Enabled for "INFO" Level).
-        message = "[Client {0} | FL Round {1}] Finished Evaluating the Model in {2} Seconds." \
-            .format(self.client_id,
-                    evaluate_config["fl_round"],
-                    evaluate_time_end)
+        message = "[Client {0} | FL Round {1}] Finished Evaluating the Model in {2} Seconds.".format(
+            self.client_id, evaluate_config["fl_round"], evaluate_time_end
+        )
         self.log_message(message, "INFO")
         # Get the Number of Testing Examples Used.
         num_testing_examples = len(self.x_test)
@@ -194,8 +237,15 @@ class Client(NumPyClient):
             testing_metrics[metric_name] = testing_metrics_history[metric_index]
             metric_index += 1
 
-        to_dfanalyzer = [self.client_id, evaluate_config["fl_round"], testing_metrics["loss"], evaluate_time_end, testing_metrics[metric_name], time.ctime()]
-        t11_output= DataSet("oClientEvaluation", [Element(to_dfanalyzer)])
+        to_dfanalyzer = [
+            self.client_id,
+            evaluate_config["fl_round"],
+            testing_metrics["loss"],
+            evaluate_time_end,
+            testing_metrics[metric_name],
+            time.ctime(),
+        ]
+        t11_output = DataSet("oClientEvaluation", [Element(to_dfanalyzer)])
         t11.add_dataset(t11_output)
         t11.end()
         # Add the Evaluate Time to the Testing Metrics.
@@ -207,10 +257,7 @@ class Client(NumPyClient):
 
 
 class FlowerClient:
-
-    def __init__(self,
-                 client_id: int,
-                 client_config_file: Path) -> None:
+    def __init__(self, client_id: int, client_config_file: Path) -> None:
         # Client's ID and Config File.
         self.client_id = client_id
         self.client_config_file = client_config_file
@@ -232,9 +279,10 @@ class FlowerClient:
         self.y_test = None
 
     @staticmethod
-    def parse_config_section(config_parser: ConfigParser,
-                             section_name: str) -> dict:
-        parsed_section = {key: value for key, value in config_parser[section_name].items()}
+    def parse_config_section(config_parser: ConfigParser, section_name: str) -> dict:
+        parsed_section = {
+            key: value for key, value in config_parser[section_name].items()
+        }
         for key, value in parsed_section.items():
             if value == "None":
                 parsed_section[key] = None
@@ -247,7 +295,9 @@ class FlowerClient:
             elif value.replace(".", "", 1).isdigit():
                 parsed_section[key] = float(value)
             elif not findall(r"%\(.*?\)s+", value) and findall(r"\[.*?]+", value):
-                aux_list = value.replace("[", "").replace("]", "").replace(" ", "").split(",")
+                aux_list = (
+                    value.replace("[", "").replace("]", "").replace(" ", "").split(",")
+                )
                 for index, item in enumerate(aux_list):
                     if item.isdigit():
                         aux_list[index] = int(item)
@@ -255,7 +305,9 @@ class FlowerClient:
                         aux_list[index] = float(item)
                 parsed_section[key] = aux_list
             elif not findall(r"%\(.*?\)s+", value) and findall(r"\(.*?\)+", value):
-                aux_list = value.replace("(", "").replace(")", "").replace(" ", "").split(",")
+                aux_list = (
+                    value.replace("(", "").replace(")", "").replace(" ", "").split(",")
+                )
                 for index, item in enumerate(aux_list):
                     if item.isdigit():
                         aux_list[index] = int(item)
@@ -264,13 +316,10 @@ class FlowerClient:
                 parsed_section[key] = tuple(aux_list)
         return parsed_section
 
-    def set_attribute(self,
-                      attribute_name: str,
-                      attribute_value: Any) -> None:
+    def set_attribute(self, attribute_name: str, attribute_value: Any) -> None:
         setattr(self, attribute_name, attribute_value)
 
-    def get_attribute(self,
-                      attribute_name: str) -> Any:
+    def get_attribute(self, attribute_name: str) -> Any:
         return getattr(self, attribute_name)
 
     def parse_flower_client_config_file(self) -> None:
@@ -307,14 +356,16 @@ class FlowerClient:
         if general_settings["enable_logging"]:
             logger_name = "FlowerClient_" + str(self.get_attribute("client_id"))
             logging_settings = self.get_attribute("logging_settings")
-            logger = Logger(name=logger_name,
-                            level=logging_settings["level"])
-            formatter = Formatter(fmt=logging_settings["format"],
-                                  datefmt=logging_settings["date_format"])
+            logger = Logger(name=logger_name, level=logging_settings["level"])
+            formatter = Formatter(
+                fmt=logging_settings["format"], datefmt=logging_settings["date_format"]
+            )
             if logging_settings["log_to_file"]:
-                file_handler = FileHandler(filename=logging_settings["file_name"],
-                                           mode=logging_settings["file_mode"],
-                                           encoding=logging_settings["encoding"])
+                file_handler = FileHandler(
+                    filename=logging_settings["file_name"],
+                    mode=logging_settings["file_mode"],
+                    encoding=logging_settings["encoding"],
+                )
                 file_handler.setLevel(logger.getEffectiveLevel())
                 file_handler.setFormatter(formatter)
                 logger.addHandler(file_handler)
@@ -325,9 +376,7 @@ class FlowerClient:
                 logger.addHandler(console_handler)
         return logger
 
-    def log_message(self,
-                    message: str,
-                    message_level: str) -> None:
+    def log_message(self, message: str, message_level: str) -> None:
         logger = self.get_attribute("logger")
         if logger and getLevelName(logger.getEffectiveLevel()) != "NOTSET":
             if message_level == "DEBUG":
@@ -343,7 +392,11 @@ class FlowerClient:
 
     def get_grpc_server_ip_address_and_port(self) -> str:
         grpc_settings = self.get_attribute("grpc_settings")
-        return grpc_settings["grpc_server_ip_address"] + ":" + str(grpc_settings["grpc_server_port"])
+        return (
+            grpc_settings["grpc_server_ip_address"]
+            + ":"
+            + str(grpc_settings["grpc_server_port"])
+        )
 
     def instantiate_ml_model(self) -> Model:
         # Get Client Config File.
@@ -356,27 +409,51 @@ class FlowerClient:
         ml_model = None
         t3 = Task(3, dataflow_tag, "ModelConfig")
         t3.begin()
-        attributes = ["model", "optimizer", "loss_function", "loss_weights", "weighted_metrics", "run_eagerly", "steps_per_execution", "jit_compile"]
+        attributes = [
+            "model",
+            "optimizer",
+            "loss_function",
+            "loss_weights",
+            "weighted_metrics",
+            "run_eagerly",
+            "steps_per_execution",
+            "jit_compile",
+        ]
         to_dfanalyzer = [ml_model_settings.get(attr, 0) for attr in attributes]
-        
+
         if ml_model_settings["model"] == "MobileNetV2":
             # Parse 'MobileNetV2 Settings'.
-            mobilenet_v2_settings = self.parse_config_section(cp, "MobileNetV2 Settings")
+            mobilenet_v2_settings = self.parse_config_section(
+                cp, "MobileNetV2 Settings"
+            )
             # MobileNetV2 - Image Classification Model Architecture.
-            ml_model = MobileNetV2(input_shape=mobilenet_v2_settings["input_shape"],
-                                   alpha=mobilenet_v2_settings["alpha"],
-                                   include_top=mobilenet_v2_settings["include_top"],
-                                   weights=mobilenet_v2_settings["weights"],
-                                   input_tensor=mobilenet_v2_settings["input_tensor"],
-                                   pooling=mobilenet_v2_settings["pooling"],
-                                   classes=mobilenet_v2_settings["classes"],
-                                   classifier_activation=mobilenet_v2_settings["classifier_activation"])
-            attributes = ["input_shape", "alpha", "include_top", "weights", "input_tensor", "pooling", "classes", "classifier_activation"]
-            to_dfanalyzer +=[mobilenet_v2_settings.get(attr, None) for attr in attributes]
-   
+            ml_model = MobileNetV2(
+                input_shape=mobilenet_v2_settings["input_shape"],
+                alpha=mobilenet_v2_settings["alpha"],
+                include_top=mobilenet_v2_settings["include_top"],
+                weights=mobilenet_v2_settings["weights"],
+                input_tensor=mobilenet_v2_settings["input_tensor"],
+                pooling=mobilenet_v2_settings["pooling"],
+                classes=mobilenet_v2_settings["classes"],
+                classifier_activation=mobilenet_v2_settings["classifier_activation"],
+            )
+            attributes = [
+                "input_shape",
+                "alpha",
+                "include_top",
+                "weights",
+                "input_tensor",
+                "pooling",
+                "classes",
+                "classifier_activation",
+            ]
+            to_dfanalyzer += [
+                mobilenet_v2_settings.get(attr, None) for attr in attributes
+            ]
+
         else:
             to_dfanalyzer += [None, 0, None, None, None, None, 0, None]
-        t3_output= DataSet("oModelConfig", [Element(to_dfanalyzer)])
+        t3_output = DataSet("oModelConfig", [Element(to_dfanalyzer)])
         t3.add_dataset(t3_output)
         t3.end()
         # Unbind ConfigParser Object (Garbage Collector).
@@ -398,16 +475,18 @@ class FlowerClient:
             # Parse 'SGD Settings'.
             sgd_settings = self.parse_config_section(cp, "SGD Settings")
             # SGD - Stochastic Gradient Descent Optimizer (With Momentum).
-            ml_model_optimizer = SGD(learning_rate=sgd_settings["learning_rate"],
-                                     momentum=sgd_settings["momentum"],
-                                     nesterov=sgd_settings["nesterov"],
-                                     name=sgd_settings["name"])
+            ml_model_optimizer = SGD(
+                learning_rate=sgd_settings["learning_rate"],
+                momentum=sgd_settings["momentum"],
+                nesterov=sgd_settings["nesterov"],
+                name=sgd_settings["name"],
+            )
             attributes = ["learning_rate", "momentum", "nesterov", "name"]
             to_dfanalyzer = [sgd_settings.get(attr, None) for attr in attributes]
-            t4_output= DataSet("oOptimizerConfig", [Element(to_dfanalyzer)])
+            t4_output = DataSet("oOptimizerConfig", [Element(to_dfanalyzer)])
             t4.add_dataset(t4_output)
 
-        t4.end()          
+        t4.end()
         # Unbind ConfigParser Object (Garbage Collector).
         del cp
         return ml_model_optimizer
@@ -425,18 +504,22 @@ class FlowerClient:
         t5.begin()
         if ml_model_settings["loss_function"] == "SparseCategoricalCrossentropy":
             # Parse 'SparseCategoricalCrossentropy Settings'.
-            scc_settings = self.parse_config_section(cp, "SparseCategoricalCrossentropy Settings")
+            scc_settings = self.parse_config_section(
+                cp, "SparseCategoricalCrossentropy Settings"
+            )
             # SparseCategoricalCrossentropy - Stochastic Gradient Descent Optimizer (With Momentum).
-            ml_model_loss_function = SparseCategoricalCrossentropy(from_logits=scc_settings["from_logits"],
-                                                                   ignore_class=scc_settings["ignore_class"],
-                                                                   reduction=scc_settings["reduction"],
-                                                                   name=scc_settings["name"])
+            ml_model_loss_function = SparseCategoricalCrossentropy(
+                from_logits=scc_settings["from_logits"],
+                ignore_class=scc_settings["ignore_class"],
+                reduction=scc_settings["reduction"],
+                name=scc_settings["name"],
+            )
             attributes = ["from_logits", "ignore_class", "reduction", "name"]
             to_dfanalyzer = [scc_settings.get(attr, None) for attr in attributes]
-            t5_output= DataSet("oLossConfig", [Element(to_dfanalyzer)])
+            t5_output = DataSet("oLossConfig", [Element(to_dfanalyzer)])
             t5.add_dataset(t5_output)
 
-        t5.end()   
+        t5.end()
         # Unbind ConfigParser Object (Garbage Collector).
         del cp
         return ml_model_loss_function
@@ -466,14 +549,16 @@ class FlowerClient:
         metrics = self.get_attribute("metrics")
         ml_model_settings = self.get_attribute("ml_model_settings")
         # Compile ML Model.
-        self.model.compile(optimizer=optimizer,
-                           loss=loss_function,
-                           metrics=metrics,
-                           loss_weights=ml_model_settings["loss_weights"],
-                           weighted_metrics=ml_model_settings["weighted_metrics"],
-                           run_eagerly=ml_model_settings["run_eagerly"],
-                           steps_per_execution=ml_model_settings["steps_per_execution"],
-                           jit_compile=ml_model_settings["jit_compile"])
+        self.model.compile(
+            optimizer=optimizer,
+            loss=loss_function,
+            metrics=metrics,
+            loss_weights=ml_model_settings["loss_weights"],
+            weighted_metrics=ml_model_settings["weighted_metrics"],
+            run_eagerly=ml_model_settings["run_eagerly"],
+            steps_per_execution=ml_model_settings["steps_per_execution"],
+            jit_compile=ml_model_settings["jit_compile"],
+        )
 
     def instantiate_flower_numpy_client(self) -> NumPyClient:
         # Get Client's ID.
@@ -491,13 +576,15 @@ class FlowerClient:
         # Get Logger.
         logger = self.get_attribute("logger")
         # Instantiate Flower's NumPyClient.
-        flower_numpy_client = Client(client_id=client_id,
-                                     model=model,
-                                     x_train=x_train,
-                                     y_train=y_train,
-                                     x_test=x_test,
-                                     y_test=y_test,
-                                     logger=logger)
+        flower_numpy_client = Client(
+            client_id=client_id,
+            model=model,
+            x_train=x_train,
+            y_train=y_train,
+            x_test=x_test,
+            y_test=y_test,
+            logger=logger,
+        )
         return flower_numpy_client
 
     def get_grpc_max_message_length_in_bytes(self) -> int:
@@ -509,7 +596,9 @@ class FlowerClient:
         if fl_settings["enable_ssl"]:
             ssl_settings = self.get_attribute("ssl_settings")
             prefix_path = Path("./FlowerClient_" + str(self.get_attribute("client_id")))
-            ca_certificate_bytes = prefix_path.joinpath(ssl_settings["ca_certificate_file"]).read_bytes()
+            ca_certificate_bytes = prefix_path.joinpath(
+                ssl_settings["ca_certificate_file"]
+            ).read_bytes()
             ssl_certificates = ca_certificate_bytes
         return ssl_certificates
 
@@ -523,24 +612,27 @@ class FlowerClient:
         # Get Secure Socket Layer (SSL) Root (CA) Certificate (SSL-Enabled Secure Connection).
         ssl_certificates = self.get_ssl_certificates()
         # Start Flower Client.
-        start_numpy_client(server_address=grpc_server_ip_address_and_port,
-                           client=flower_client,
-                           grpc_max_message_length=grpc_max_message_length_in_bytes,
-                           root_certificates=ssl_certificates)
+        start_numpy_client(
+            server_address=grpc_server_ip_address_and_port,
+            client=flower_client,
+            grpc_max_message_length=grpc_max_message_length_in_bytes,
+            root_certificates=ssl_certificates,
+        )
 
 
 def main() -> None:
     # Begin.
     # Parse Flower Client Arguments.
     ag = ArgumentParser(description="Flower Client Arguments")
-    ag.add_argument("--client_id",
-                    type=int,
-                    required=True,
-                    help="Client ID (no default)")
-    ag.add_argument("--client_config_file",
-                    type=Path,
-                    required=True,
-                    help="Client Config File (no default)")
+    ag.add_argument(
+        "--client_id", type=int, required=True, help="Client ID (no default)"
+    )
+    ag.add_argument(
+        "--client_config_file",
+        type=Path,
+        required=True,
+        help="Client Config File (no default)",
+    )
     parsed_args = ag.parse_args()
     # Get Flower Client Arguments.
     client_id = int(parsed_args.client_id)
@@ -572,10 +664,10 @@ def main() -> None:
     start = perf_counter()
 
     local_data = fc.load_ml_model_local_data()
-    
+
     end = perf_counter()
-    to_dfanalyzer = [end-start]
-    t6_output= DataSet("oDatasetLoad", [Element(to_dfanalyzer)])
+    to_dfanalyzer = [client_id, end - start]
+    t6_output = DataSet("oDatasetLoad", [Element(to_dfanalyzer)])
     t6.add_dataset(t6_output)
     t6.end()
     fc.set_attribute("x_train", local_data[0])
@@ -596,4 +688,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

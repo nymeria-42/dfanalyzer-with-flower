@@ -50,8 +50,7 @@ COPY DfAnalyzer/pom.xml DfAnalyzer/pom.xml
 COPY DfAnalyzer/DbConnection.java DfAnalyzer/src/main/java/rest/config/DbConnection.java
 COPY DfAnalyzer/DataflowProvenance.java DfAnalyzer/src/main/java/di/provenance/DataflowProvenance.java
 COPY DfAnalyzer/WebConf.java DfAnalyzer/src/main/java/rest/server/WebConf.java
-
-VOLUME ["/DfAnalyzer/src", "/dataflow_analyzer/library/dfa-lib-python"]
+COPY DfAnalyzer/TaskProvenance.java DfAnalyzer/src/main/java/di/provenance/TaskProvenance.java
 
 # Prepare DfAnalyzer to be executed
 RUN mvn -f DfAnalyzer/pom.xml clean package

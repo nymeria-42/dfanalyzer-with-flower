@@ -24,15 +24,15 @@ environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 # Load Model (MobileNetV2): 10 Output Classes
 model = MobileNetV2(input_shape=(32, 32, 3), classes=10, weights=None)
-model.compile(optimizer="adam",
-              loss="sparse_categorical_crossentropy",
-              metrics=["accuracy"])
+model.compile(
+    optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"]
+)
 
 # Load Data (CIFAR-10): Popular Colored Image Classification Dataset
 (x_train, y_train), (x_test, y_test) = cifar10.load_data()
 
 # Server IPv4 or IPv6 Address
-server_address="127.0.0.1:8080"
+server_address = "127.0.0.1:8080"
 
 t1 = Task(1, dataflow_tag, "ServerConfig")
 t2 = Task(2, dataflow_tag, "Strategy", dependency=t1)
@@ -49,12 +49,18 @@ class CifarClient(NumPyClient):
         server_round = config["server_round"]
         local_epochs = config["local_epochs"]
         batch_size = config["batch_size"]
-        print("[SERVER ROUND {0}] Local Epochs: {1} | Batch Size: {2}".format(server_round, local_epochs, batch_size))
+        print(
+            "[SERVER ROUND {0}] Local Epochs: {1} | Batch Size: {2}".format(
+                server_round, local_epochs, batch_size
+            )
+        )
         model.set_weights(parameters)
         print("Fitting Model:")
-        t4 = Task(4, dataflow_tag, "ClientTraining", dependency = t3)
+        t4 = Task(4, dataflow_tag, "ClientTraining", dependency=t3)
 
-        t4_input = DataSet("iClientTraining", [Element([CLIENT_NUMBER, server_round, len(x_train)])])
+        t4_input = DataSet(
+            "iClientTraining", [Element([CLIENT_NUMBER, server_round, len(x_train)])]
+        )
         t4.add_dataset(t4_input)
         t4.begin()
         start = timeit.default_timer()
@@ -62,7 +68,7 @@ class CifarClient(NumPyClient):
         model.fit(x_train, y_train, epochs=local_epochs, batch_size=batch_size)
 
         end = timeit.default_timer()
-        t4_output= DataSet("oClientTraining", [Element([CLIENT_NUMBER, end - start])])
+        t4_output = DataSet("oClientTraining", [Element([CLIENT_NUMBER, end - start])])
         t4.add_dataset(t4_output)
         t4.end()
 
@@ -71,26 +77,34 @@ class CifarClient(NumPyClient):
     def evaluate(self, parameters, config):
         model.set_weights(parameters)
         print("Evaluating Model:")
-        t5 = Task(5, dataflow_tag, "ClientEvaluation", dependency = Task(4, dataflow_tag, "ClientTraining", dependency = t3))
+        t5 = Task(
+            5,
+            dataflow_tag,
+            "ClientEvaluation",
+            dependency=Task(4, dataflow_tag, "ClientTraining", dependency=t3),
+        )
         t5_input = DataSet("iClientEvaluation", [Element([CLIENT_NUMBER, len(x_test)])])
         t5.add_dataset(t5_input)
         t5.begin()
-        
+
         start = timeit.default_timer()
 
         loss, accuracy = model.evaluate(x_test, y_test)
 
         end = timeit.default_timer()
 
-        t5_output= DataSet("oClientEvaluation", [Element([CLIENT_NUMBER, loss, accuracy, end - start])])
+        t5_output = DataSet(
+            "oClientEvaluation", [Element([CLIENT_NUMBER, loss, accuracy, end - start])]
+        )
         t5.add_dataset(t5_output)
         t5.end()
         return loss, len(x_test), {"accuracy": accuracy}
+
 
 # Root Certificates (SSL-Enabled Secure Connection)
 # root_certificates = Path("../.cache/certificates/ca.crt").read_bytes()
 
 # Start Flower Client
-start_numpy_client(server_address=server_address,
-                   client=CifarClient(),
-                   root_certificates=None)
+start_numpy_client(
+    server_address=server_address, client=CifarClient(), root_certificates=None
+)
