@@ -19,7 +19,9 @@ from dfa_lib_python.dataset import DataSet
 from dfa_lib_python.element import Element
 from dfa_lib_python.task_status import TaskStatus
 from dfa_lib_python.extractor_extension import ExtractorExtension
+from dfa_lib_python.dependency import Dependency
 import time
+
 
 dataflow_tag = "flower-df"
 
@@ -228,14 +230,21 @@ class FlowerServer:
                                                                        fit_config["fl_round"],
                                                                        fit_config)
         self.log_message(message, "DEBUG")
-        t3 = Task(3, dataflow_tag, "TrainingConfig")
-        t3.begin()
+        t7 = Task(7, dataflow_tag, "TrainingConfig")
+        t7.add_dependency(Dependency(["serverconfig", "strategy"], ["1", "2"]))
+        t7.begin()
+        
+        to_dfanalyzer = [fl_round, time.ctime()]
+
+        t7_input= DataSet("iTrainingConfig", [Element(to_dfanalyzer)])
+        t7.add_dataset(t7_input)
+
         attributes = ["shuffle", "batch_size", "initial_epoch", "epochs", "steps_per_epoch", "validation_split","validation_batch_size"]
         to_dfanalyzer = [fl_round, time.ctime()] + [training_hyper_parameters_settings.get(attr, 0) for attr in attributes]
 
-        t3_output= DataSet("oTrainingConfig", [Element(to_dfanalyzer)])
-        t3.add_dataset(t3_output)
-        t3.end()
+        t7_output= DataSet("oTrainingConfig", [Element(to_dfanalyzer)])
+        t7.add_dataset(t7_output)
+        t7.end()
         # Return the Training Configuration to be Sent to All Participating Clients.
         return fit_config
 
@@ -256,20 +265,27 @@ class FlowerServer:
                                                                             evaluate_config)
         self.log_message(message, "DEBUG")
         
-        t4 = Task(4, dataflow_tag, "TestConfig")
-        t4.begin()
+        t9 = Task(9, dataflow_tag, "TestConfig")
+        t9.begin()
         attributes = ["batch_size", "steps"]
         to_dfanalyzer = [testing_hyper_parameters_settings.get(attr, 0) for attr in attributes]
 
-        t4_output= DataSet("oTestConfig", [Element(to_dfanalyzer)])
-        t4.add_dataset(t4_output)
-        t4.end()                                                                   
+        t9_output= DataSet("oTestConfig", [Element(to_dfanalyzer)])
+        t9.add_dataset(t9_output)
+        t9.end()                                                                   
         # Return the Testing Configuration to be Sent to All Participating Clients.
         return evaluate_config
 
     def fit_metrics_aggregation_fn(self,
                                    training_metrics: List[Tuple[int, Metrics]]) -> Optional[Metrics]:
         """Metrics aggregation function called by Flower after every training round."""
+        t9 = Task(9, dataflow_tag, "ServerTrainingAggregation", dependency = Task(8, dataflow_tag, "ClientTraining"))
+        t9.begin()
+        attributes = [ "server_round", "starting_time",]
+        to_dfanalyzer = [self.get_attribute("fl_round"), time.ctime()]
+        t9_input= DataSet("iServerTrainingAggregation", [Element(to_dfanalyzer)])
+        t9.add_dataset(t9_input)
+
         # Get the Total Number of Participating Clients.
         total_num_clients = len(training_metrics)
         # Get the Training Metrics Names.
@@ -288,6 +304,8 @@ class FlowerServer:
             metric_name = metrics_names_list[metric_index]
             weighted_average_metric = sum(metrics_products_list[metric_index]) / total_num_examples
             aggregated_metrics[metric_name] = weighted_average_metric
+        
+        
         # Log the Aggregated Training Metrics (If Logger is Enabled for "INFO" Level).
         message = "[Server {0} | FL Round {1} | {2}] Aggregated Training Metrics (Weighted Average): {3}" \
             .format(self.get_attribute("server_id"),
@@ -295,6 +313,12 @@ class FlowerServer:
                     "".join([str(total_num_clients), " Clients" if total_num_clients > 1 else " Client"]),
                     aggregated_metrics)
         self.log_message(message, "INFO")
+
+        
+        to_dfanalyzer = [self.get_attribute("fl_round"), total_num_clients, total_num_examples, aggregated_metrics["sparse_categorical_accuracy"], aggregated_metrics["loss"],  aggregated_metrics["fit_time"], time.ctime()]
+        t9_output= DataSet("oServerTrainingAggregation", [Element(to_dfanalyzer)])
+        t9.add_dataset(t9_output)
+        t9.end()
         # Return the Aggregated Training Metrics.
         return aggregated_metrics
 
@@ -302,12 +326,12 @@ class FlowerServer:
                                         testing_metrics: List[Tuple[int, Metrics]]) -> Optional[Metrics]:
         """Metrics aggregation function called by Flower after every testing round."""
         # Get the Total Number of Participating Clients.
-        t8 = Task(8, dataflow_tag, "ClientEvaluation")
-        t8.begin()
-        attributes = ["receiving_time", "server_round"]
-        to_dfanalyzer = [time.ctime(), self.get_attribute("fl_round")]
-        t8_input= DataSet("iClientEvaluation", [Element(to_dfanalyzer)])
-        t8.add_dataset(t8_input)
+        t12 = Task(12, dataflow_tag, "ServerEvaluationAggregation", dependency = Task(11, dataflow_tag, "ClientEvaluation"))
+        t12.begin()
+        attributes = [ "server_round", "receiving_time",]
+        to_dfanalyzer = [self.get_attribute("fl_round"), time.ctime()]
+        t12_input= DataSet("iServerEvaluationAggregation", [Element(to_dfanalyzer)])
+        t12.add_dataset(t12_input)
 
 
         total_num_clients = len(testing_metrics)
@@ -328,11 +352,6 @@ class FlowerServer:
             weighted_average_metric = sum(metrics_products_list[metric_index]) / total_num_examples
             aggregated_metrics[metric_name] = weighted_average_metric
         
-        attributes = ["total_num_clients", "total_num_examples", "aggregated_metrics"]
-        to_dfanalyzer = [total_num_clients, total_num_examples, aggregated_metrics]
-        t8_output= DataSet("oClientEvaluation", [Element(to_dfanalyzer)])
-        t8.add_dataset(t8_output)
-        t8.end()
         # Log the Aggregated Testing Metrics (If Logger is Enabled for "INFO" Level).
         message = "[Server {0} | FL Round {1} | {2}] Aggregated Testing Metrics (Weighted Average): {3}" \
             .format(self.get_attribute("server_id"),
@@ -340,6 +359,11 @@ class FlowerServer:
                     "".join([str(total_num_clients), " Clients" if total_num_clients > 1 else " Client"]),
                     aggregated_metrics)
         self.log_message(message, "INFO")
+
+        to_dfanalyzer = [self.get_attribute("fl_round"), total_num_clients, total_num_examples, aggregated_metrics["sparse_categorical_accuracy"], aggregated_metrics["loss"],  aggregated_metrics["evaluate_time"], time.ctime()]
+        t12_output= DataSet("oServerEvaluationAggregation", [Element(to_dfanalyzer)])
+        t12.add_dataset(t12_output)
+        t12.end()
         # Return the Aggregated Testing Metrics.
         return aggregated_metrics
 
@@ -352,9 +376,9 @@ class FlowerServer:
         cp.read(filenames=server_config_file, encoding="utf-8")
         fl_settings = self.get_attribute("fl_settings")
         server_aggregation_strategy = None
+        t2 = Task(2, dataflow_tag, "Strategy")
+        t2.begin()
         if fl_settings["server_aggregation_strategy"] == "FedAvg":
-            t2 = Task(2, dataflow_tag, "Strategy")
-            t2.begin()
             # FedAvg - Federated Averaging Aggregation Strategy.
             server_aggregation_strategy = \
                 FedAvg(fraction_fit=fl_settings["fraction_fit"],
@@ -369,14 +393,12 @@ class FlowerServer:
                        initial_parameters=self.get_attribute("global_model_initial_parameters"),
                        fit_metrics_aggregation_fn=self.fit_metrics_aggregation_fn,
                        evaluate_metrics_aggregation_fn=self.evaluate_metrics_aggregation_fn)
-                    
+            t2_output= DataSet("oStrategy", [Element([0, 0])])
+            t2.add_dataset(t2_output)         
 
-            t2.end()
         elif fl_settings["server_aggregation_strategy"] == "FedAvgM":
             # Parse 'FedAvgM Settings'.
             fed_avg_m_settings = self.parse_config_section(cp, "FedAvgM Settings")
-            t2 = Task(2, dataflow_tag, "Strategy")
-            t2.begin()
             # FedAvgM - Federated Averaging with Server Momentum Aggregation Strategy.
             server_aggregation_strategy = \
                 FedAvgM(fraction_fit=fl_settings["fraction_fit"],
@@ -397,7 +419,7 @@ class FlowerServer:
             to_dfanalyzer = [fed_avg_m_settings.get(attr, None) for attr in attributes]
             t2_output= DataSet("oStrategy", [Element(to_dfanalyzer)])
             t2.add_dataset(t2_output)
-            t2.end()
+        t2.end()
         # Unbind ConfigParser Object (Garbage Collector).
         del cp
         return server_aggregation_strategy
@@ -454,9 +476,8 @@ class FlowerServer:
 def main() -> None:
     # Begin.
 
-    ##########
+        ##########
     # DfAnalyzer Instrumentation
-    dataflow_tag = "flower-df"
     df = Dataflow(dataflow_tag)
 
     tf1 = Transformation("ServerConfig")
@@ -487,43 +508,8 @@ def main() -> None:
     tf2.set_sets([tf2_output])
     df.add_transformation(tf2)
 
-    tf3 = Transformation("TrainingConfig")
-    tf3_output = Set("oTrainingConfig", SetType.OUTPUT, 
-        [Attribute("server_round", AttributeType.NUMERIC),
-        Attribute("time_sending", AttributeType.TEXT),
-        Attribute("shuffle", AttributeType.TEXT),
-        Attribute("batch_size", AttributeType.NUMERIC),
-        Attribute("initial_epoch", AttributeType.NUMERIC),
-        Attribute("epochs", AttributeType.NUMERIC),
-        Attribute("steps_per_epoch", AttributeType.TEXT),
-        Attribute("validation_split", AttributeType.NUMERIC),
-        Attribute("validation_batch_size", AttributeType.TEXT)])
-
-    # definição de dependencia de task
-    tf1_output.set_type(SetType.INPUT)
-    tf1_output.dependency=tf1._tag
-    tf2_output.set_type(SetType.INPUT)
-    tf2_output.dependency=tf2._tag
-
-    tf3.set_sets([tf1_output, tf2_output, tf3_output])
-    df.add_transformation(tf3)
-
-    tf4 = Transformation("TestConfig")
-    tf4_output = Set("oTestConfig", SetType.OUTPUT, 
-        [Attribute("batch_size", AttributeType.NUMERIC),
-        Attribute("steps", AttributeType.TEXT)])
-    tf4.set_sets([tf4_output])
-    df.add_transformation(tf4)
-
-
-    tf5 = Transformation("DatasetLoad")
-    tf5_output = Set("oDatasetLoad", SetType.OUTPUT, 
-        [Attribute("loading_time", AttributeType.TEXT)])
-    tf5.set_sets([tf5_output])
-    df.add_transformation(tf5)
-
-    tf6 = Transformation("ModelConfig")
-    tf6_output = Set("oModelConfig", SetType.OUTPUT, 
+    tf3 = Transformation("ModelConfig")
+    tf3_output = Set("oModelConfig", SetType.OUTPUT, 
         [Attribute("model", AttributeType.TEXT),
         Attribute("optimizer", AttributeType.TEXT),
         Attribute("loss_function", AttributeType.TEXT),
@@ -540,47 +526,80 @@ def main() -> None:
         Attribute("pooling", AttributeType.TEXT),
         Attribute("classes", AttributeType.NUMERIC),
         Attribute("classifier_activation", AttributeType.TEXT)])
-    tf6.set_sets([tf6_output])
-    df.add_transformation(tf6)
+    tf3.set_sets([tf3_output])
+    df.add_transformation(tf3)
 
-    tf7 = Transformation("SGDConfig")
-    tf7_output = Set("oSGDConfig", SetType.OUTPUT, 
+    tf4 = Transformation("OptimizerConfig")
+    tf4_output = Set("oOptimizerConfig", SetType.OUTPUT, 
         [Attribute("learning_rate", AttributeType.NUMERIC),
         Attribute("momentum", AttributeType.NUMERIC),
         Attribute("nesterov", AttributeType.TEXT),
         Attribute("name", AttributeType.TEXT)])
-    tf7.set_sets([tf7_output])
-    df.add_transformation(tf7)
+    tf4.set_sets([tf4_output])
+    df.add_transformation(tf4)
 
-    tf8 = Transformation("LossConfig")
-    tf8_output = Set("oLossConfig", SetType.OUTPUT, 
+    tf5 = Transformation("LossConfig")
+    tf5_output = Set("oLossConfig", SetType.OUTPUT, 
         [Attribute("from_logits", AttributeType.TEXT),
         Attribute("ignore_class", AttributeType.TEXT),
         Attribute("reduction", AttributeType.TEXT),
         Attribute("name", AttributeType.TEXT)])
-    tf8.set_sets([tf8_output])
-    df.add_transformation(tf8)
+    tf5.set_sets([tf5_output])
+    df.add_transformation(tf5)
 
     
-    tf9 = Transformation("ClientTraining")
-    tf9_input = Set("iClientTraining", SetType.INPUT, 
+    tf6 = Transformation("DatasetLoad")
+    tf6_output = Set("oDatasetLoad", SetType.OUTPUT, 
+        [Attribute("loading_time", AttributeType.TEXT)])
+    tf6.set_sets([tf6_output])
+    df.add_transformation(tf6)
+
+    tf7 = Transformation("TrainingConfig")
+    tf7_input = Set("iTrainingConfig", SetType.INPUT, 
+    [Attribute("server_round", AttributeType.NUMERIC),
+    Attribute("starting_time", AttributeType.TEXT)])
+
+    tf7_output = Set("oTrainingConfig", SetType.OUTPUT, 
+        [Attribute("server_round", AttributeType.NUMERIC),
+        Attribute("ending_time", AttributeType.TEXT),
+        Attribute("shuffle", AttributeType.TEXT),
+        Attribute("batch_size", AttributeType.NUMERIC),
+        Attribute("initial_epoch", AttributeType.NUMERIC),
+        Attribute("epochs", AttributeType.NUMERIC),
+        Attribute("steps_per_epoch", AttributeType.TEXT),
+        Attribute("validation_split", AttributeType.NUMERIC),
+        Attribute("validation_batch_size", AttributeType.TEXT)])
+
+    tf2_output.set_type(SetType.INPUT)
+    tf2_output.dependency=tf2._tag
+
+    tf1_output.set_type(SetType.INPUT)
+    tf1_output.dependency=tf1._tag
+
+    tf7.set_sets([tf1_output, tf2_output, tf7_input, tf7_output])
+    df.add_transformation(tf7)
+
+    tf8 = Transformation("ClientTraining")
+    tf8_input = Set("iClientTraining", SetType.INPUT, 
         [Attribute("client_id", AttributeType.NUMERIC),
         Attribute("server_round", AttributeType.NUMERIC),
         Attribute("size_x_train", AttributeType.NUMERIC),
         Attribute("global_current_parameters", AttributeType.TEXT),
-        Attribute("time_receiving", AttributeType.TEXT),
+        Attribute("starting_time", AttributeType.TEXT),
         ])
-    tf9_output = Set("oClientTraining", SetType.OUTPUT, 
+    tf8_output = Set("oClientTraining", SetType.OUTPUT, 
         [Attribute("client_id", AttributeType.NUMERIC),
         Attribute("server_round", AttributeType.NUMERIC),
         Attribute("training_time", AttributeType.NUMERIC),
-        Attribute("training_metrics_name", AttributeType.TEXT),
-        Attribute("training_metrics_value", AttributeType.NUMERIC),
+        Attribute("accuracy", AttributeType.NUMERIC),
         Attribute("local_weights", AttributeType.TEXT),
-        Attribute("time_end_training", AttributeType.TEXT)])
+        Attribute("ending_time", AttributeType.TEXT)])
 
     tf3_output.set_type(SetType.INPUT)
     tf3_output.dependency=tf3._tag
+
+    tf4_output.set_type(SetType.INPUT)
+    tf4_output.dependency=tf4._tag
 
     tf5_output.set_type(SetType.INPUT)
     tf5_output.dependency=tf5._tag
@@ -591,54 +610,83 @@ def main() -> None:
     tf7_output.set_type(SetType.INPUT)
     tf7_output.dependency=tf7._tag
 
+
+    tf8.set_sets([tf3_output, tf4_output, tf5_output, tf6_output, tf7_output, tf8_input, tf8_output])
+    df.add_transformation(tf8)
+
+    tf9 = Transformation("ServerTrainingAggregation")
+    tf9_input = Set("iServerTrainingAggregation", SetType.INPUT, 
+        [Attribute("server_round", AttributeType.NUMERIC),
+        Attribute("starting_time", AttributeType.TEXT)
+        ])
+    tf9_output = Set("oServerTrainingAggregation", SetType.OUTPUT, 
+        [Attribute("server_round", AttributeType.NUMERIC),
+        Attribute("total_num_clients", AttributeType.NUMERIC),
+        Attribute("total_num_examples", AttributeType.NUMERIC),
+        Attribute("accuracy", AttributeType.NUMERIC),
+        Attribute("loss", AttributeType.NUMERIC),
+        Attribute("training_time", AttributeType.NUMERIC),
+        Attribute("ending_time", AttributeType.TEXT)])
+
     tf8_output.set_type(SetType.INPUT)
     tf8_output.dependency=tf8._tag
 
-    tf9.set_sets([tf3_output, tf5_output, tf6_output, tf7_output, tf8_output, tf9_input, tf9_output])
+    tf9.set_sets([tf8_output, tf9_input, tf9_output])
     df.add_transformation(tf9)
+    
+    tf10 = Transformation("TestConfig")
+    tf10_output = Set("oTestConfig", SetType.OUTPUT, 
+        [Attribute("batch_size", AttributeType.NUMERIC),
+        Attribute("steps", AttributeType.TEXT)])
+    tf10.set_sets([tf10_output])
+    df.add_transformation(tf10)
 
-    tf10 = Transformation("ClientEvaluation")
-    tf10_input = Set("iClientEvaluation", SetType.INPUT, 
+    tf11 = Transformation("ClientEvaluation")
+    tf11_input = Set("iClientEvaluation", SetType.INPUT, 
         [Attribute("client_id", AttributeType.NUMERIC),
+        Attribute("server_round", AttributeType.NUMERIC),
         Attribute("num_testing_examples", AttributeType.NUMERIC),
-        Attribute("receiving_time", AttributeType.TEXT)])
-    tf10_output = Set("oClientEvaluation", SetType.OUTPUT, 
+        Attribute("starting_time", AttributeType.TEXT)])
+    tf11_output = Set("oClientEvaluation", SetType.OUTPUT, 
         [Attribute("client_id", AttributeType.NUMERIC),
+        Attribute("server_round", AttributeType.NUMERIC),
         Attribute("loss", AttributeType.NUMERIC),
         Attribute("evaluation_time", AttributeType.NUMERIC),
-        Attribute("testing_metrics_name", AttributeType.TEXT),
-        Attribute("testing_metrics_value", AttributeType.NUMERIC),
-        Attribute("time_end_evaluation", AttributeType.TEXT)])
+        Attribute("accuracy", AttributeType.NUMERIC),
+        Attribute("ending_time", AttributeType.TEXT)])
 
     tf9_output.set_type(SetType.INPUT)
     tf9_output.dependency=tf9._tag
 
-    tf4_output.set_type(SetType.INPUT)
-    tf4_output.dependency=tf4._tag
-
-    tf10.set_sets([tf4_output, tf9_output, tf10_input, tf10_output])
-    df.add_transformation(tf10)
-
-    tf11 = Transformation("ServerEvaluation")
-    tf11_input = Set("iServerEvaluation", SetType.INPUT, 
-        [Attribute("server_round", AttributeType.NUMERIC),
-            Attribute("receiving_time", AttributeType.TEXT)
-        ])
-    tf11_output = Set("oServerEvaluation", SetType.OUTPUT, 
-        [Attribute("total_num_clients", AttributeType.NUMERIC),
-        Attribute("total_num_examples", AttributeType.NUMERIC),
-        Attribute("aggregated_metrics", AttributeType.TEXT)])
-
     tf10_output.set_type(SetType.INPUT)
     tf10_output.dependency=tf10._tag
 
-    tf11.set_sets([tf10_output, tf11_input, tf11_output])
+    tf11.set_sets([tf9_output, tf10_output, tf11_input, tf11_output])
     df.add_transformation(tf11)
+
+    tf12 = Transformation("ServerEvaluationAggregation")
+    tf12_input = Set("iServerEvaluationAggregation", SetType.INPUT, 
+        [Attribute("server_round", AttributeType.NUMERIC),
+        Attribute("starting_time", AttributeType.TEXT)
+        ])
+    tf12_output = Set("oServerEvaluationAggregation", SetType.OUTPUT, 
+        [Attribute("server_round", AttributeType.NUMERIC),
+        Attribute("total_num_clients", AttributeType.NUMERIC),
+        Attribute("total_num_examples", AttributeType.NUMERIC),
+        Attribute("accuracy", AttributeType.NUMERIC),
+        Attribute("loss", AttributeType.NUMERIC),
+        Attribute("evaluation_time", AttributeType.NUMERIC),
+        Attribute("ending_time", AttributeType.TEXT)])
+
+    tf11_output.set_type(SetType.INPUT)
+    tf11_output.dependency=tf11._tag
+
+    tf12.set_sets([tf11_output, tf12_input, tf12_output])
+    df.add_transformation(tf12)
 
     df.save()
 
     ##########
-
     # Parse Flower Server Arguments.
     ag = ArgumentParser(description="Flower Server Arguments")
     ag.add_argument("--server_id",
@@ -669,7 +717,6 @@ def main() -> None:
     # Instantiate and Set Flower Server's Config.
     flower_server_config = fs.instantiate_flower_server_config()
     fs.set_attribute("flower_server_config", flower_server_config)
-    print(flower_server_config)
     # Start Flower Server.
     fs.start_flower_server()
     # Unbind Objects (Garbage Collector).

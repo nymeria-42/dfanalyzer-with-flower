@@ -38,20 +38,28 @@ ENV M2_HOME /opt/apache-maven-3.5.3
 ENV MAVEN_HOME /opt/apache-maven-3.5.3
 ENV PATH ${M2_HOME}/bin:${PATH}
 
+# Install application's requirements
+RUN pip install flwr tensorflow
+
 WORKDIR /dataflow_analyzer
 
 # Copy files that provides fixes to usage of DfAnalyzer with the latest version of MonetDB and bigger upperbound limit to attribute text
-COPY ["DfAnalyzer/pom.xml", "DfAnalyzer/data-local.zip", "DfAnalyzer/src/main/java/rest/config/DbConnection.java", "DfAnalyzer/src/main/java/rest/server/WebConf.java", "DfAnalyzer/src/main/java/di/provenance/DataflowProvenance.java", "DfAnalyzer/"] 
+
+COPY DfAnalyzer/data-local.zip DfAnalyzer/data-local.zip
+COPY DfAnalyzer/pom.xml DfAnalyzer/pom.xml
+COPY DfAnalyzer/DbConnection.java DfAnalyzer/src/main/java/rest/config/DbConnection.java
+COPY DfAnalyzer/DataflowProvenance.java DfAnalyzer/src/main/java/di/provenance/DataflowProvenance.java
+COPY DfAnalyzer/WebConf.java DfAnalyzer/src/main/java/rest/server/WebConf.java
+
+VOLUME ["/DfAnalyzer/src", "/dataflow_analyzer/library/dfa-lib-python"]
 
 # Prepare DfAnalyzer to be executed
-RUN mvn -f DfAnalyzer/pom.xml clean package \
-    && cd maven && ./install_libraries.sh && cd .. \
-    && mvn -f RawDataExtractor/pom.xml clean package \
-    && mvn -f RawDataIndexer/pom.xml clean package \
-    && cd library/dfa-lib-python && make install;
+RUN mvn -f DfAnalyzer/pom.xml clean package
+    # && cd maven && ./install_libraries.sh && cd .. \
+    # && mvn -f RawDataExtractor/pom.xml clean package \
+    # && mvn -f RawDataIndexer/pom.xml clean package \
 
-# Install application's requirements
-RUN pip install flwr tensorflow
+RUN cd library/dfa-lib-python && make install
 
 # Specify volumes to applications on container-side
 VOLUME ["/dataflow_analyzer/applications/flower-studies", "/dataflow_analyzer/applications/flowering"]
