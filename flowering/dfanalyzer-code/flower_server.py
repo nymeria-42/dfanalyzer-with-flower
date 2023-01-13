@@ -21,6 +21,8 @@ from dfa_lib_python.task_status import TaskStatus
 from dfa_lib_python.extractor_extension import ExtractorExtension
 from dfa_lib_python.dependency import Dependency
 import time
+import pymonetdb
+
 
 
 dataflow_tag = "flower-df"

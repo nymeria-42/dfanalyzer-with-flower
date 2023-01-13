@@ -85,8 +85,6 @@ public class TaskProvenance {
             if (!t.dependencyIDs.isEmpty()) {
                 for (int i = 0; i < t.dependencyIDs.size(); i++) {
                     String[] record = t.dependencyIDs.get(i);
-                    Utils.print(0, "record " + record + " i " + i);
-                    Utils.print(0, "record  length " + record.length + " i " + i);
                     // if (record.length == t.dependencyTags.size()) {
                         // for (int index = 0; index < t.dependencyTags.size(); index++) {
                             if (Utils.isNumericArray(record[0])) {
@@ -313,7 +311,6 @@ public class TaskProvenance {
 
     private static void updateElementsWithDependency(Connection db, Task t, Set s, DBMS dbms) throws SQLException {
         try {
-            Utils.print(0, "dependencyTaskIDs" + t.dependencyTaskIDs.toString());
             if (!t.dependencyTaskIDs.isEmpty()) {
 
                 StringBuilder query = new StringBuilder();
@@ -367,8 +364,8 @@ public class TaskProvenance {
 
                 //query.append(";").append(Utils.NEW_LINE).append(" COMMIT;");
                 query.append(";");
-                Utils.print(0, query.toString());
 //                if (Utils.verbose) {
+//                  Utils.print(0, query.toString());
 //                }
 
                 if (hasCondition) {
@@ -377,7 +374,6 @@ public class TaskProvenance {
                 }
             }
         } catch (SQLException ex) {
-            Utils.print(0, ex.toString());
             Logger.getLogger(Provenance.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
