@@ -24,7 +24,6 @@ import time
 import pymonetdb
 
 
-
 dataflow_tag = "flower-df"
 
 
@@ -271,13 +270,29 @@ class FlowerServer:
         )
         self.log_message(message, "DEBUG")
         t7 = Task(7 + 6 * (fl_round - 1), dataflow_tag, "TrainingConfig")
-        t7.add_dependency(Dependency(["serverconfig", "strategy"], ["1", "2"]))
+        t7.add_dependency(Dependency(["serverconfig", "strategy", "serverevaluationagregation"], ["1", "2", str(12 + 6 * (fl_round - 1))]))
         t7.begin()
 
         to_dfanalyzer = [fl_round, time.ctime()]
 
         t7_input = DataSet("iTrainingConfig", [Element(to_dfanalyzer)])
         t7.add_dataset(t7_input)
+
+        # connection = pymonetdb.connect(username="monetdb", password="monetdb", hostname="127.0.0.1", port="50001", database="dataflow_analyzer")
+
+        # # create a cursor
+        # cursor = connection.cursor()
+
+        # # increase the rows fetched to increase performance (optional)
+        # cursor.arraysize = 100
+
+        # # execute a query (return the number of rows to fetch)
+        # cursor.execute('SELECT * FROM oserverconfig')
+
+        # # fetch only one row
+        # print(cursor.fetchone())
+
+    
 
         attributes = [
             "shuffle",
@@ -739,13 +754,28 @@ def main() -> None:
         ],
     )
 
+    tf12_output = Set(
+        "oServerEvaluationAggregation",
+        SetType.INPUT,
+        [
+            Attribute("server_round", AttributeType.NUMERIC),
+            Attribute("total_num_clients", AttributeType.NUMERIC),
+            Attribute("total_num_examples", AttributeType.NUMERIC),
+            Attribute("accuracy", AttributeType.NUMERIC),
+            Attribute("loss", AttributeType.NUMERIC),
+            Attribute("evaluation_time", AttributeType.NUMERIC),
+            Attribute("ending_time", AttributeType.TEXT),
+        ],
+    )
+    tf12_output.dependency = "serverevaluationaggregation"
+
     tf2_output.set_type(SetType.INPUT)
     tf2_output.dependency = tf2._tag
 
     tf1_output.set_type(SetType.INPUT)
     tf1_output.dependency = tf1._tag
 
-    tf7.set_sets([tf1_output, tf2_output, tf7_input, tf7_output])
+    tf7.set_sets([tf1_output, tf2_output, tf12_output, tf7_input, tf7_output])
     df.add_transformation(tf7)
 
     tf8 = Transformation("ClientTraining")
