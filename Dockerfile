@@ -65,6 +65,7 @@ VOLUME ["/dataflow_analyzer/applications/flower-studies", "/dataflow_analyzer/ap
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 # Specify port to expose on container-side
-EXPOSE 22000
+EXPOSE 22000 50000 8082
 
+COPY DfAnalyzer/start-dfanalyzer.sh DfAnalyzer/start-dfanalyzer.sh
 CMD ["/bin/bash"]

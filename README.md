@@ -45,4 +45,8 @@ Para ver a interface web do DfAnalyzer, acessar [`http://localhost:22000`](http:
 - É possível visualizar o grafo com as tasks do workflow executado.
 - OBS: queries pela interface gráfica não estão funcionais.
 
+Para ver o endereço IP do container do dfanalyzer:
+```docker
+docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' dfanalyzer
+```
 Link do repositório do DfAnalyzer: [`https://gitlab.com/ssvitor/dataflow_analyzer`](https://gitlab.com/ssvitor/dataflow_analyzer)
