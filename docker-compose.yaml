@@ -4,23 +4,23 @@ services:
     image: dfanalyzer
     container_name: dfanalyzer
     restart: always
-    networks: 
-      - network 
+    network_mode: "host"
     environment:
       - DFA_URL=http://0.0.0.0
-    ports:
-      - 22000:22000
-      - 50001:50000
+    # ports:
+    #   - 22000:22000
+    #   - 50000:50000
     working_dir: "/dataflow_analyzer/DfAnalyzer"
     entrypoint: ["sh", "start-dfanalyzer.sh"]
 
   server:
     image: dfanalyzer
     restart: "no"
-    networks: 
-      - network 
+    network_mode: "host"
+    # networks: 
+    #   - network 
     environment:
-      - DFA_URL=http://dfanalyzer:22000
+      - DFA_URL=http://localhost:22000
     ports: 
      - 8082:8082
     volumes: 
@@ -31,18 +31,18 @@ services:
   client:
     image: dfanalyzer
     restart: "no"
-    networks: 
-      - network 
+    network_mode: "host"
+    # networks: 
+    #   - network 
     environment:
-      - DFA_URL=http://dfanalyzer:22000
+      - DFA_URL=http://localhost:22000
     volumes: 
       - ./flowering:/dataflow_analyzer/applications/flowering
     working_dir: "/dataflow_analyzer/applications/flowering/"
-    entrypoint: ["bash", "script/start_flower_clients.sh", "1", "config/flower_clients.cfg"]
+    entrypoint: ["bash", "script/start_flower_clients.sh", "3", "config/flower_clients.cfg"]
 
       
 networks:
-  network:
-    external: 
-      name: flower-network
+  host:
+    name: host
 
