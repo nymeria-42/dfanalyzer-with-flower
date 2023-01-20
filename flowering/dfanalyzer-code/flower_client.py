@@ -91,7 +91,7 @@ class Client(NumPyClient):
                     "datasetload",
                     "trainingconfig",
                 ],
-                ["3", "4", "5", "6", "7"],
+                ["3", "4", "5", "6", str(6 + 6 * (fit_config["fl_round"] - 1))],
             )
         )
 
@@ -191,14 +191,7 @@ class Client(NumPyClient):
 
         t11 = Task(
             11 + 6 * (evaluate_config["fl_round"] - 1), dataflow_tag, "ClientEvaluation"
-        )
-        t11.add_dependency(
-            Dependency(
-                ["servertrainingaggregation", "test_config"],
-                [
-                    str(9 + 6 * (evaluate_config["fl_round"] - 1)),
-                    str(10 + 6 * (evaluate_config["fl_round"] - 1)),
-                ],
+        , dependency = Task(10 + 6 * (evaluate_config["fl_round"] - 1), dataflow_tag, "EvaluationConfig"
             )
         )
 

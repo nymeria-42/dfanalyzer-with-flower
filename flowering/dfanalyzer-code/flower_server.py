@@ -269,31 +269,29 @@ class FlowerServer:
             self.get_attribute("server_id"), fit_config["fl_round"], fit_config
         )
         self.log_message(message, "DEBUG")
+
+        conn = pymonetdb.connect(username="monetdb", password="monetdb", hostname="localhost", port="50000", database="dataflow_analyzer")
+        cursor = conn.cursor()
+        # cursor.arraysize = 100
+        cursor.execute('SELECT accuracy, loss FROM oserverevaluationaggregation')
+        conn.commit()
+        # fetch only one row
+        message = "Previous results (accuracy, loss): {0}".format(cursor.fetchall())
+        self.log_message(message, "INFO")
+        cursor.close() 
+        conn.close()
+
         t7 = Task(7 + 6 * (fl_round - 1), dataflow_tag, "TrainingConfig")
         if fl_round == 1:
             t7.add_dependency(Dependency(["serverconfig", "strategy", "serverevaluationaggregation"], ["1", "2", "0"]))
         else:
-            t7.add_dependency(Dependency(["serverconfig", "strategy", "serverevaluationaggregation"], ["1", "2", str(12 + 6 * (fl_round - 2))]))
-        t7.begin()
+            t7.add_dependency(Dependency(["serverconfig", "strategy", "serverevaluationaggregation"], ["1", "2", str(12 + 6  * (fl_round - 2))]))
 
         to_dfanalyzer = [fl_round, time.ctime()]
 
         t7_input = DataSet("iTrainingConfig", [Element(to_dfanalyzer)])
         t7.add_dataset(t7_input)
-
-        connection = pymonetdb.connect(username="monetdb", password="monetdb", hostname="localhost", port="50000", database="dataflow_analyzer")
-
-        # create a cursor
-        cursor = connection.cursor()
-
-        # increase the rows fetched to increase performance (optional)
-        cursor.arraysize = 100
-
-        # execute a query (return the number of rows to fetch)
-        cursor.execute('SELECT accuracy, loss FROM oclientevaluation WHERE server_round = (%s - 1)', [fl_round])
-
-        # fetch only one row
-        print(cursor.fetchone())
+        t7.begin()
 
         attributes = [
             "shuffle",
@@ -304,6 +302,7 @@ class FlowerServer:
             "validation_split",
             "validation_batch_size",
         ]
+
         to_dfanalyzer = [fl_round, time.ctime()] + [
             training_hyper_parameters_settings.get(attr, 0) for attr in attributes
         ]
@@ -311,6 +310,7 @@ class FlowerServer:
         t7_output = DataSet("oTrainingConfig", [Element(to_dfanalyzer)])
         t7.add_dataset(t7_output)
         t7.end()
+
         # Return the Training Configuration to be Sent to All Participating Clients.
         return fit_config
 
@@ -336,14 +336,14 @@ class FlowerServer:
         )
         self.log_message(message, "DEBUG")
 
-        t10 = Task(10, dataflow_tag, "TestConfig")
+        t10 = Task(10 + 6 * (fl_round - 1), dataflow_tag, "EvaluationConfig", dependency=Task(9 + 6 * (fl_round - 1), dataflow_tag,"ServerTrainingAggregation"))
         t10.begin()
         attributes = ["batch_size", "steps"]
         to_dfanalyzer = [
             testing_hyper_parameters_settings.get(attr, 0) for attr in attributes
         ]
 
-        t10_output = DataSet("oTestConfig", [Element(to_dfanalyzer)])
+        t10_output = DataSet("oEvaluationConfig", [Element(to_dfanalyzer)])
         t10.add_dataset(t10_output)
         t10.end()
         # Return the Testing Configuration to be Sent to All Participating Clients.
@@ -428,13 +428,12 @@ class FlowerServer:
         """Metrics aggregation function called by Flower after every testing round."""
         # Get the Total Number of Participating Clients.
         t12 = Task(
-            12 + 6 * (self.get_attribute("fl_round") - 1),
+            12 + 6  * (self.get_attribute("fl_round") - 1),
             dataflow_tag,
             "ServerEvaluationAggregation",
-            dependency=Dependency(
-                ["clientevaluation"], [11 + 6 * (self.get_attribute("fl_round") - 1)]
-            ),
-        )
+            dependency=Task(11 + 6  * (self.get_attribute("fl_round") - 1), dataflow_tag, "clientevaluation"
+            ))
+
         t12.begin()
         starting_time = time.ctime()
         to_dfanalyzer = [self.get_attribute("fl_round"),
@@ -480,7 +479,7 @@ class FlowerServer:
         self.log_message(message, "INFO")
 
         to_dfanalyzer = [
-
+            self.get_attribute("fl_round"),
             total_num_clients,
             total_num_examples,
             aggregated_metrics["sparse_categorical_accuracy"],
@@ -757,14 +756,6 @@ def main() -> None:
         ],
     )
 
-    # tf12_output = Set(
-    #     "oServerEvaluationAggregation",
-    #     SetType.INPUT,
-    #     [
-            
-    #     ],
-    # )
-    # tf12_output.dependency = "serverevaluationaggregation"
 
     tf2_output.set_type(SetType.INPUT)
     tf2_output.dependency = tf2._tag
@@ -774,7 +765,6 @@ def main() -> None:
 
     tf7.set_sets([tf1_output, tf2_output, tf7_input, tf7_output])
 
-    # tf7.set_sets([tf1_output, tf2_output, tf12_output, tf7_input, tf7_output])
     df.add_transformation(tf7)
 
     tf8 = Transformation("ClientTraining")
@@ -859,16 +849,20 @@ def main() -> None:
     tf9.set_sets([tf8_output, tf9_input, tf9_output])
     df.add_transformation(tf9)
 
-    tf10 = Transformation("TestConfig")
+    tf10 = Transformation("EvaluationConfig")
     tf10_output = Set(
-        "oTestConfig",
+        "oEvaluationConfig",
         SetType.OUTPUT,
         [
             Attribute("batch_size", AttributeType.NUMERIC),
             Attribute("steps", AttributeType.TEXT),
         ],
     )
-    tf10.set_sets([tf10_output])
+
+    tf9_output.set_type(SetType.INPUT)
+    tf9_output.dependency = tf9._tag
+
+    tf10.set_sets([tf9_output, tf10_output])
     df.add_transformation(tf10)
 
     tf11 = Transformation("ClientEvaluation")
@@ -895,13 +889,11 @@ def main() -> None:
         ],
     )
 
-    tf9_output.set_type(SetType.INPUT)
-    tf9_output.dependency = tf9._tag
 
     tf10_output.set_type(SetType.INPUT)
     tf10_output.dependency = tf10._tag
 
-    tf11.set_sets([tf9_output, tf10_output, tf11_input, tf11_output])
+    tf11.set_sets([tf10_output, tf11_input, tf11_output])
     df.add_transformation(tf11)
 
     tf12 = Transformation("ServerEvaluationAggregation")
@@ -922,7 +914,7 @@ def main() -> None:
     tf12_output = Set(
         "oServerEvaluationAggregation",
         SetType.OUTPUT,
-        [
+        [   Attribute("server_round", AttributeType.NUMERIC),
             Attribute("total_num_clients", AttributeType.NUMERIC),
             Attribute("total_num_examples", AttributeType.NUMERIC),
             Attribute("accuracy", AttributeType.NUMERIC),
