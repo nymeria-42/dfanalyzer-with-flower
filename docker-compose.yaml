@@ -10,8 +10,10 @@ services:
     # ports:
     #   - 22000:22000
     #   - 50000:50000
+    volumes:
+      - ./dataset-splitter/dataset_partitions:/dataset_partitions
     working_dir: "/dataflow_analyzer/DfAnalyzer"
-    entrypoint: ["sh", "start-dfanalyzer.sh"]
+    entrypoint: [ "sh", "start-dfanalyzer.sh" ]
 
   server:
     image: dfanalyzer
@@ -21,24 +23,102 @@ services:
       - DFA_URL=http://localhost:22000
     # ports: 
     #  - 8082:8082
-    volumes: 
+    volumes:
       - ./flowering:/dataflow_analyzer/applications/flowering
     working_dir: "/dataflow_analyzer/applications/flowering/"
-    entrypoint: ["bash", "script/start_flower_server.sh", "config/flower_server.cfg"]
+    entrypoint:
+      [
+        "bash",
+        "script/start_flower_server.sh",
+        "config/flower_server.cfg"
+      ]
 
-  client:
+  client1:
     image: dfanalyzer
     restart: "no"
     network_mode: "host"
     environment:
       - DFA_URL=http://localhost:22000
-    volumes: 
+    volumes:
       - ./flowering:/dataflow_analyzer/applications/flowering
+      - ./dataset-splitter/dataset_partitions/partition_0:/dataset
     working_dir: "/dataflow_analyzer/applications/flowering/"
-    entrypoint: ["bash", "script/start_flower_clients.sh", "1", "config/flower_clients.cfg"]
+    entrypoint:
+      [
+        "bash",
+        "script/start_flower_clients.sh",
+        "0",
+        "config/flower_clients.cfg"
+      ]
 
-      
-networks:
-  host:
-    name: host
+  client2:
+    image: dfanalyzer
+    restart: "no"
+    network_mode: "host"
+    environment:
+      - DFA_URL=http://localhost:22000
+    volumes:
+      - ./flowering:/dataflow_analyzer/applications/flowering
+      - ./dataset-splitter/dataset_partitions/partition_1:/dataset
+    working_dir: "/dataflow_analyzer/applications/flowering/"
+    entrypoint:
+      [
+        "bash",
+        "script/start_flower_clients.sh",
+        "1",
+        "config/flower_clients.cfg"
+      ]
 
+  client3:
+    image: dfanalyzer
+    restart: "no"
+    network_mode: "host"
+    environment:
+      - DFA_URL=http://localhost:22000
+    volumes:
+      - ./flowering:/dataflow_analyzer/applications/flowering
+      - ./dataset-splitter/dataset_partitions/partition_2:/dataset
+    working_dir: "/dataflow_analyzer/applications/flowering/"
+    entrypoint:
+      [
+        "bash",
+        "script/start_flower_clients.sh",
+        "2",
+        "config/flower_clients.cfg"
+      ]
+
+  client4:
+    image: dfanalyzer
+    restart: "no"
+    network_mode: "host"
+    environment:
+      - DFA_URL=http://localhost:22000
+    volumes:
+      - ./flowering:/dataflow_analyzer/applications/flowering
+      - ./dataset-splitter/dataset_partitions/partition_3:/dataset
+    working_dir: "/dataflow_analyzer/applications/flowering/"
+    entrypoint:
+      [
+        "bash",
+        "script/start_flower_clients.sh",
+        "3",
+        "config/flower_clients.cfg"
+      ]
+
+  client5:
+    image: dfanalyzer
+    restart: "no"
+    network_mode: "host"
+    environment:
+      - DFA_URL=http://localhost:22000
+    volumes:
+      - ./flowering:/dataflow_analyzer/applications/flowering
+      - ./dataset-splitter/dataset_partitions/partition_4:/dataset
+    working_dir: "/dataflow_analyzer/applications/flowering/"
+    entrypoint:
+      [
+        "bash",
+        "script/start_flower_clients.sh",
+        "4",
+        "config/flower_clients.cfg"
+      ]

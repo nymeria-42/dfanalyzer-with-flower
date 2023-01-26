@@ -54,9 +54,9 @@ COPY DfAnalyzer/TaskProvenance.java DfAnalyzer/src/main/java/di/provenance/TaskP
 
 # Prepare DfAnalyzer to be executed
 RUN mvn -f DfAnalyzer/pom.xml clean package
-    # && cd maven && ./install_libraries.sh && cd .. \
-    # && mvn -f RawDataExtractor/pom.xml clean package \
-    # && mvn -f RawDataIndexer/pom.xml clean package \
+# && cd maven && ./install_libraries.sh && cd .. \
+# && mvn -f RawDataExtractor/pom.xml clean package \
+# && mvn -f RawDataIndexer/pom.xml clean package \
 
 RUN cd library/dfa-lib-python && make install
 

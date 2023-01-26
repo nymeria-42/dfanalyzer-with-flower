@@ -1,9 +1,9 @@
 from argparse import ArgumentParser
 from configparser import ConfigParser
-from logging import FileHandler, Formatter, getLevelName, Logger, StreamHandler
 from flwr.common import Metrics, NDArrays, Parameters
 from flwr.server import Server, ServerConfig, SimpleClientManager, start_server
 from flwr.server.strategy import FedAvg, FedAvgM, Strategy
+from logging import FileHandler, Formatter, getLevelName, Logger, StreamHandler
 from pathlib import Path
 from re import findall
 from typing import Any, List, Optional, Tuple
@@ -179,6 +179,9 @@ class FlowerServer:
                 fmt=logging_settings["format"], datefmt=logging_settings["date_format"]
             )
             if logging_settings["log_to_file"]:
+                file_parents_path = findall("(.*/)", logging_settings["file_name"])
+                if file_parents_path:
+                    Path(file_parents_path[0]).mkdir(parents=True, exist_ok=True)
                 file_handler = FileHandler(
                     filename=logging_settings["file_name"],
                     mode=logging_settings["file_mode"],
@@ -270,22 +273,88 @@ class FlowerServer:
         )
         self.log_message(message, "DEBUG")
 
-        conn = pymonetdb.connect(username="monetdb", password="monetdb", hostname="localhost", port="50000", database="dataflow_analyzer")
-        cursor = conn.cursor()
-        # cursor.arraysize = 100
-        cursor.execute('SELECT accuracy, loss FROM oserverevaluationaggregation')
-        conn.commit()
-        # fetch only one row
-        message = "Previous results (accuracy, loss): {0}".format(cursor.fetchall())
-        self.log_message(message, "INFO")
-        cursor.close() 
-        conn.close()
+        if fl_round != 1:
+            conn = pymonetdb.connect(
+                username="monetdb",
+                password="monetdb",
+                hostname="localhost",
+                port="50000",
+                database="dataflow_analyzer",
+            )
+            cursor = conn.cursor()
+            # cursor.arraysize = 100
+            result = None
+            tries = 0
+
+            while tries < 5 and not result:
+                cursor.execute(
+                    "SELECT accuracy FROM oserverevaluationaggregation WHERE server_round = ({}-1)".format(
+                        fl_round
+                    )
+                )
+                conn.commit()
+                result = cursor.fetchone()
+                if result:
+                    result = result[-1]
+                tries += 1
+                time.sleep(0.05)
+
+            # fetch only one row
+            message = "Previous result (accuracy): {0}".format(result)
+            self.log_message(message, "INFO")
+
+            accuracy_threshold = 0.3
+            cursor.execute(
+                "SELECT accuracy_threshold({}, {})".format(accuracy_threshold, fl_round)
+            )
+            result = cursor.fetchone()[-1]
+            message = "Accuracy threshold: {0}".format(result)
+            self.log_message(message, "INFO")
+
+            if result and fl_round > 2:
+                accuracy_change_limit = 0.05
+                cursor.execute(
+                    "SELECT accuracy_change({}, {})".format(
+                        accuracy_change_limit, fl_round
+                    )
+                )
+                result = cursor.fetchone()
+                if result:
+                    result = result[-1]
+                message = "Accuracy change: {0}".format(result)
+                self.log_message(message, "INFO")
+
+                if result:
+                    training_time_change = 2  # limit: two times slower
+                    cursor.execute(
+                        "SELECT training_time_change({}, {})".format(
+                            training_time_change, fl_round
+                        )
+                    )
+                    result = cursor.fetchone()
+                    if result:
+                        result = result[-1]
+                    message = "Training time change: {0}".format(result)
+                    self.log_message(message, "INFO")
+
+            cursor.close()
+            conn.close()
 
         t7 = Task(7 + 6 * (fl_round - 1), dataflow_tag, "TrainingConfig")
         if fl_round == 1:
-            t7.add_dependency(Dependency(["serverconfig", "strategy", "serverevaluationaggregation"], ["1", "2", "0"]))
+            t7.add_dependency(
+                Dependency(
+                    ["serverconfig", "strategy", "serverevaluationaggregation"],
+                    ["1", "2", "0"],
+                )
+            )
         else:
-            t7.add_dependency(Dependency(["serverconfig", "strategy", "serverevaluationaggregation"], ["1", "2", str(12 + 6  * (fl_round - 2))]))
+            t7.add_dependency(
+                Dependency(
+                    ["serverconfig", "strategy", "serverevaluationaggregation"],
+                    ["1", "2", str(12 + 6 * (fl_round - 2))],
+                )
+            )
 
         to_dfanalyzer = [fl_round, time.ctime()]
 
@@ -336,7 +405,14 @@ class FlowerServer:
         )
         self.log_message(message, "DEBUG")
 
-        t10 = Task(10 + 6 * (fl_round - 1), dataflow_tag, "EvaluationConfig", dependency=Task(9 + 6 * (fl_round - 1), dataflow_tag,"ServerTrainingAggregation"))
+        t10 = Task(
+            10 + 6 * (fl_round - 1),
+            dataflow_tag,
+            "EvaluationConfig",
+            dependency=Task(
+                9 + 6 * (fl_round - 1), dataflow_tag, "ServerTrainingAggregation"
+            ),
+        )
         t10.begin()
         attributes = ["batch_size", "steps"]
         to_dfanalyzer = [
@@ -428,16 +504,19 @@ class FlowerServer:
         """Metrics aggregation function called by Flower after every testing round."""
         # Get the Total Number of Participating Clients.
         t12 = Task(
-            12 + 6  * (self.get_attribute("fl_round") - 1),
+            12 + 6 * (self.get_attribute("fl_round") - 1),
             dataflow_tag,
             "ServerEvaluationAggregation",
-            dependency=Task(11 + 6  * (self.get_attribute("fl_round") - 1), dataflow_tag, "clientevaluation"
-            ))
+            dependency=Task(
+                11 + 6 * (self.get_attribute("fl_round") - 1),
+                dataflow_tag,
+                "clientevaluation",
+            ),
+        )
 
         t12.begin()
         starting_time = time.ctime()
-        to_dfanalyzer = [self.get_attribute("fl_round"),
-            starting_time]
+        to_dfanalyzer = [self.get_attribute("fl_round"), starting_time]
         t12_input = DataSet("iServerEvaluationAggregation", [Element(to_dfanalyzer)])
         t12.add_dataset(t12_input)
 
@@ -664,8 +743,20 @@ def main() -> None:
     tf2.set_sets([tf2_output])
     df.add_transformation(tf2)
 
-    tf3 = Transformation("ModelConfig")
+    tf3 = Transformation("DatasetLoad")
     tf3_output = Set(
+        "oDatasetLoad",
+        SetType.OUTPUT,
+        [
+            Attribute("client_id", AttributeType.NUMERIC),
+            Attribute("loading_time", AttributeType.TEXT),
+        ],
+    )
+    tf3.set_sets([tf3_output])
+    df.add_transformation(tf3)
+
+    tf4 = Transformation("ModelConfig")
+    tf4_output = Set(
         "oModelConfig",
         SetType.OUTPUT,
         [
@@ -687,11 +778,11 @@ def main() -> None:
             Attribute("classifier_activation", AttributeType.TEXT),
         ],
     )
-    tf3.set_sets([tf3_output])
-    df.add_transformation(tf3)
+    tf4.set_sets([tf4_output])
+    df.add_transformation(tf4)
 
-    tf4 = Transformation("OptimizerConfig")
-    tf4_output = Set(
+    tf5 = Transformation("OptimizerConfig")
+    tf5_output = Set(
         "oOptimizerConfig",
         SetType.OUTPUT,
         [
@@ -701,11 +792,11 @@ def main() -> None:
             Attribute("name", AttributeType.TEXT),
         ],
     )
-    tf4.set_sets([tf4_output])
-    df.add_transformation(tf4)
+    tf5.set_sets([tf5_output])
+    df.add_transformation(tf5)
 
-    tf5 = Transformation("LossConfig")
-    tf5_output = Set(
+    tf6 = Transformation("LossConfig")
+    tf6_output = Set(
         "oLossConfig",
         SetType.OUTPUT,
         [
@@ -713,18 +804,6 @@ def main() -> None:
             Attribute("ignore_class", AttributeType.TEXT),
             Attribute("reduction", AttributeType.TEXT),
             Attribute("name", AttributeType.TEXT),
-        ],
-    )
-    tf5.set_sets([tf5_output])
-    df.add_transformation(tf5)
-
-    tf6 = Transformation("DatasetLoad")
-    tf6_output = Set(
-        "oDatasetLoad",
-        SetType.OUTPUT,
-        [
-            Attribute("client_id", AttributeType.NUMERIC),
-            Attribute("loading_time", AttributeType.TEXT),
         ],
     )
     tf6.set_sets([tf6_output])
@@ -756,12 +835,11 @@ def main() -> None:
         ],
     )
 
+    tf1_output.set_type(SetType.INPUT)
+    tf1_output.dependency = tf1._tag
 
     tf2_output.set_type(SetType.INPUT)
     tf2_output.dependency = tf2._tag
-
-    tf1_output.set_type(SetType.INPUT)
-    tf1_output.dependency = tf1._tag
 
     tf7.set_sets([tf1_output, tf2_output, tf7_input, tf7_output])
 
@@ -889,7 +967,6 @@ def main() -> None:
         ],
     )
 
-
     tf10_output.set_type(SetType.INPUT)
     tf10_output.dependency = tf10._tag
 
@@ -914,7 +991,8 @@ def main() -> None:
     tf12_output = Set(
         "oServerEvaluationAggregation",
         SetType.OUTPUT,
-        [   Attribute("server_round", AttributeType.NUMERIC),
+        [
+            Attribute("server_round", AttributeType.NUMERIC),
             Attribute("total_num_clients", AttributeType.NUMERIC),
             Attribute("total_num_examples", AttributeType.NUMERIC),
             Attribute("accuracy", AttributeType.NUMERIC),
@@ -939,6 +1017,61 @@ def main() -> None:
     df.add_transformation(tf7)
 
     df.save()
+    tries = 0
+    while tries < 10:
+        try:
+            conn = pymonetdb.connect(
+                username="monetdb",
+                password="monetdb",
+                hostname="localhost",
+                port="50000",
+                database="dataflow_analyzer",
+            )
+            cursor = conn.cursor()
+
+            cursor.execute(
+                """ CREATE FUNCTION accuracy_threshold (threshold double, fl_round int)
+                RETURNS boolean
+                BEGIN
+                    RETURN
+                    SELECT 
+                        CASE WHEN accuracy < threshold THEN 1 ELSE 0 END
+                    FROM 
+                        (SELECT accuracy FROM oserverevaluationaggregation WHERE server_round = (fl_round-1)) as t1;
+                END;"""
+            )
+
+            cursor.execute(
+                """CREATE FUNCTION accuracy_change (accuracy_change_limit double, fl_round int)
+                RETURNS boolean
+                BEGIN
+                    RETURN
+                    SELECT 
+                        CASE WHEN accuracy_change > accuracy_change_limit THEN 1 ELSE 0 END 
+                    FROM
+                        (SELECT MAX(accuracy) - MIN(accuracy) AS accuracy_change FROM oserverevaluationaggregation WHERE server_round BETWEEN (fl_round-6) AND (fl_round-1)) as t1;
+                END;"""
+            )
+
+            cursor.execute(
+                """CREATE FUNCTION training_time_change (training_limit double, fl_round int)
+                RETURNS boolean
+                BEGIN
+                    RETURN
+                    SELECT 
+                        CASE WHEN training_time_change < training_limit THEN 1 ELSE 0 END
+                    FROM
+                        (SELECT MAX(training_time)/MIN(training_time) AS training_time_change FROM oservertrainingaggregation WHERE server_round BETWEEN (fl_round-6) AND (fl_round-1)) as t1;
+                END;"""
+            )
+
+            conn.commit()
+            cursor.close()
+            conn.close()
+            break
+        except:
+            time.sleep(1)
+            tries += 1
 
     ##########
     # Parse Flower Server Arguments.

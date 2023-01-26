@@ -2,20 +2,24 @@ from argparse import ArgumentParser
 from configparser import ConfigParser
 from flwr.client import NumPyClient, start_numpy_client
 from flwr.common import NDArray, NDArrays
-from os import environ
-
-environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-from keras.models import Model
-from keras.applications import MobileNetV2
-from keras.datasets import cifar10
-from keras.losses import Loss, SparseCategoricalCrossentropy
-from keras.metrics import SparseCategoricalAccuracy
-from keras.optimizers import Optimizer, SGD
 from logging import FileHandler, Formatter, getLevelName, Logger, StreamHandler
+from numpy import empty
 from pathlib import Path
+from PIL import Image
 from re import findall
 from time import perf_counter
 from typing import Any, Optional, Tuple
+from os import environ
+
+environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
+from keras.applications import MobileNetV2
+from keras.applications.mobilenet_v2 import preprocess_input
+from keras.losses import Loss, SparseCategoricalCrossentropy
+from keras.metrics import SparseCategoricalAccuracy
+from keras.models import Model
+from keras.optimizers import Optimizer, SGD
+
 
 from dfa_lib_python.dataflow import Dataflow
 from dfa_lib_python.transformation import Transformation
@@ -190,9 +194,14 @@ class Client(NumPyClient):
         self.log_message(message, "INFO")
 
         t11 = Task(
-            11 + 6 * (evaluate_config["fl_round"] - 1), dataflow_tag, "ClientEvaluation"
-        , dependency = Task(10 + 6 * (evaluate_config["fl_round"] - 1), dataflow_tag, "EvaluationConfig"
-            )
+            11 + 6 * (evaluate_config["fl_round"] - 1),
+            dataflow_tag,
+            "ClientEvaluation",
+            dependency=Task(
+                10 + 6 * (evaluate_config["fl_round"] - 1),
+                dataflow_tag,
+                "EvaluationConfig",
+            ),
         )
 
         t11.begin()
@@ -258,18 +267,19 @@ class FlowerClient:
         self.fl_settings = None
         self.ssl_settings = None
         self.grpc_settings = None
+        self.dataset_settings = None
         self.ml_model_settings = None
         # Other Attributes.
         self.logger = None
         self.flower_client = None
-        self.model = None
-        self.optimizer = None
-        self.loss_function = None
-        self.metrics = None
         self.x_train = None
         self.y_train = None
         self.x_test = None
         self.y_test = None
+        self.model = None
+        self.optimizer = None
+        self.loss_function = None
+        self.metrics = None
 
     @staticmethod
     def parse_config_section(config_parser: ConfigParser, section_name: str) -> dict:
@@ -337,6 +347,9 @@ class FlowerClient:
         # Parse 'gRPC Settings' and Set Attributes.
         grpc_settings = self.parse_config_section(cp, "gRPC Settings")
         self.set_attribute("grpc_settings", grpc_settings)
+        # Parse 'Dataset Settings' and Set Attributes.
+        dataset_settings = self.parse_config_section(cp, "Dataset Settings")
+        self.set_attribute("dataset_settings", dataset_settings)
         # Parse 'ML Model Settings' and Set Attributes.
         ml_model_settings = self.parse_config_section(cp, "ML Model Settings")
         self.set_attribute("ml_model_settings", ml_model_settings)
@@ -354,6 +367,9 @@ class FlowerClient:
                 fmt=logging_settings["format"], datefmt=logging_settings["date_format"]
             )
             if logging_settings["log_to_file"]:
+                file_parents_path = findall("(.*/)", logging_settings["file_name"])
+                if file_parents_path:
+                    Path(file_parents_path[0]).mkdir(parents=True, exist_ok=True)
                 file_handler = FileHandler(
                     filename=logging_settings["file_name"],
                     mode=logging_settings["file_mode"],
@@ -390,6 +406,91 @@ class FlowerClient:
             + ":"
             + str(grpc_settings["grpc_server_port"])
         )
+
+    @staticmethod
+    def derive_num_images(y_phase_labels_file: Path) -> int:
+        return sum(1 for _ in open(file=y_phase_labels_file, mode="r"))
+
+    @staticmethod
+    def derive_images_attributes(
+        x_phase_folder: Path, y_phase_labels_file: Path
+    ) -> tuple:
+        first_line = next(open(file=y_phase_labels_file, mode="r"))
+        split_line = first_line.rstrip().split(", ")
+        image_file = x_phase_folder.joinpath(split_line[0])
+        im = Image.open(fp=image_file)
+        width, height = im.size
+        depth = len(im.getbands())
+        return width, height, depth
+
+    def load_x_y_for_multi_class_image_classification(self, phase: str) -> tuple:
+        dataset_root_folder = Path(
+            self.get_attribute("dataset_settings")["dataset_root_folder"]
+        )
+        x_phase_folder = None
+        y_phase_folder = None
+        if phase == "train":
+            x_phase_folder = dataset_root_folder.joinpath("x_train")
+            y_phase_folder = dataset_root_folder.joinpath("y_train")
+        elif phase == "test":
+            x_phase_folder = dataset_root_folder.joinpath("x_test")
+            y_phase_folder = dataset_root_folder.joinpath("y_test")
+        y_phase_labels_file = y_phase_folder.joinpath("labels.txt")
+        number_of_examples = self.derive_num_images(y_phase_labels_file)
+        width, height, depth = self.derive_images_attributes(
+            x_phase_folder, y_phase_labels_file
+        )
+        derived_x_shape = (number_of_examples, height, width, depth)
+        derived_y_shape = (number_of_examples, 1)
+        x_phase = empty(shape=derived_x_shape, dtype="uint8")
+        y_phase = empty(shape=derived_y_shape, dtype="uint8")
+        with open(file=y_phase_labels_file, mode="r") as labels_file:
+            index = 0
+            lines = [next(labels_file) for _ in range(number_of_examples)]
+            for line in lines:
+                split_line = line.rstrip().split(", ")
+                image_file = x_phase_folder.joinpath(split_line[0])
+                x_phase[index] = Image.open(fp=image_file)
+                label = split_line[1]
+                y_phase[index] = label
+                index += 1
+        return x_phase, y_phase
+
+    def load_ml_model_private_dataset(self) -> None:
+        dataset_settings = self.get_attribute("dataset_settings")
+        dataset_storage_location = dataset_settings["dataset_storage_location"]
+        dataset_root_folder = dataset_settings["dataset_root_folder"]
+        dataset_type = dataset_settings["dataset_type"]
+        # Log the Private Dataset Loading Start.
+        message = (
+            "[Client {0}] Loading the '{1}' Private Dataset ({2} Storage)...".format(
+                self.client_id, dataset_root_folder, dataset_storage_location
+            )
+        )
+        self.log_message(message, "INFO")
+        # Start the Private Dataset Load Timer.
+        private_dataset_load_start = perf_counter()
+        if dataset_type == "multi_class_image_classification":
+            if dataset_storage_location == "Local":
+                # Load From Local Storage and Set x_train and y_train.
+                x_train, y_train = self.load_x_y_for_multi_class_image_classification(
+                    "train"
+                )
+                self.set_attribute("x_train", x_train)
+                self.set_attribute("y_train", y_train)
+                # Load From Local Storage and Set x_test and y_test.
+                x_test, y_test = self.load_x_y_for_multi_class_image_classification(
+                    "test"
+                )
+                self.set_attribute("x_test", x_test)
+                self.set_attribute("y_test", y_test)
+        # Get the Private Dataset Loading Time in Seconds (Loading Duration).
+        private_dataset_load_end = perf_counter() - private_dataset_load_start
+        # Log the Private Dataset Loading Time (If Logger is Enabled for "INFO" Level).
+        message = "[Client {0}] Finished Loading the '{1}' Private Dataset in {2} Seconds.".format(
+            self.client_id, dataset_root_folder, private_dataset_load_end
+        )
+        self.log_message(message, "INFO")
 
     def instantiate_ml_model(self) -> Model:
         # Get Client Config File.
@@ -450,6 +551,14 @@ class FlowerClient:
         t3.add_dataset(t3_output)
         t3.end()
         # Unbind ConfigParser Object (Garbage Collector).
+
+        # Preprocess x_train and x_test (MobileNetV2 Expects the [-1, 1] Pixel Values Range).
+        x_train = self.get_attribute("x_train")
+        x_train = preprocess_input(x=x_train)
+        self.set_attribute("x_train", x_train)
+        x_test = self.get_attribute("x_test")
+        x_test = preprocess_input(x=x_test)
+        self.set_attribute("x_test", x_test)
         del cp
         return ml_model
 
@@ -637,6 +746,18 @@ def main() -> None:
     # Instantiate and Set Logger.
     logger = fc.load_logger()
     fc.set_attribute("logger", logger)
+    # Load ML Model's Private Dataset (x_train, y_train, x_test, and y_test).
+    t6 = Task(3, dataflow_tag, "DatasetLoad")
+    t6.begin()
+    start = perf_counter()
+
+    fc.load_ml_model_private_dataset()
+
+    end = perf_counter()
+    to_dfanalyzer = [client_id, end - start]
+    t6_output = DataSet("oDatasetLoad", [Element(to_dfanalyzer)])
+    t6.add_dataset(t6_output)
+    t6.end()
     # Instantiate and Set ML Model.
     model = fc.instantiate_ml_model()
     fc.set_attribute("model", model)
@@ -651,22 +772,6 @@ def main() -> None:
     fc.set_attribute("metrics", metrics)
     # Compile ML Model.
     fc.compile_ml_model()
-    # Load and Set ML Model's Local Data (x_train, y_train, x_test, y_test).
-    t6 = Task(6, dataflow_tag, "DatasetLoad")
-    t6.begin()
-    start = perf_counter()
-
-    local_data = fc.load_ml_model_local_data()
-
-    end = perf_counter()
-    to_dfanalyzer = [client_id, end - start]
-    t6_output = DataSet("oDatasetLoad", [Element(to_dfanalyzer)])
-    t6.add_dataset(t6_output)
-    t6.end()
-    fc.set_attribute("x_train", local_data[0])
-    fc.set_attribute("y_train", local_data[1])
-    fc.set_attribute("x_test", local_data[2])
-    fc.set_attribute("y_test", local_data[3])
     # Instantiate and Set Flower Client.
     flower_client = fc.instantiate_flower_numpy_client()
     fc.set_attribute("flower_client", flower_client)

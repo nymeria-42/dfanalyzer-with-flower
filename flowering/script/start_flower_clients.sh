@@ -54,22 +54,23 @@ if [ $number_of_provided_arguments -lt $number_of_required_arguments ]; then
 fi
 
 # Script Arguments.
-num_clients=${1}
+# num_clients=${1}
+client_id=${1}
 client_config_file=${2}
 
 # Launch the Flower Clients (Background Processes).
-for ((client_id = 0; client_id < $num_clients; client_id++)); do
-    python3 dfanalyzer-code/flower_client.py \
-        --client_id=$client_id \
-        --client_config_file=$client_config_file &
-done
+# for ((client_id = 0; client_id < $num_clients; client_id++)); do
+python3 dfanalyzer-code/flower_client.py \
+    --client_id=$client_id \
+    --client_config_file=$client_config_file &
+# done
 
 # Print the Number of Flower Clients Launched.
-if [ $num_clients -eq 0 ] || [ $num_clients -gt 1 ]; then
-    echo "Launched $num_clients Flower Clients."
-else
-    echo "Launched $num_clients Flower Client."
-fi
+# if [ $num_clients -eq 0 ] || [ $num_clients -gt 1 ]; then
+    # echo "Launched $num_clients Flower Clients!"
+# else
+echo "Launched $client_id Flower Client!"
+# fi
 
 # Wait for All Background Processes to Finish.
 wait
