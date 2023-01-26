@@ -1,0 +1,42 @@
+## SE ATINGIU THRESHOLD
+CREATE FUNCTION accuracy_threshold (threshold double, fl_round int)
+RETURNS boolean
+BEGIN
+    RETURN
+    SELECT 
+        CASE WHEN accuracy < threshold THEN 1 ELSE 0 END AS result
+    FROM 
+    (SELECT 
+        accuracy 
+    FROM oserverevaluationaggregation 
+    WHERE server_round = (fl_round-1)) as t1;
+END;
+
+
+## SE ATINGIU LIMITE DE INCREMENTO DE ACURÁCIA -> ex: accuracy_change < 0.05
+CREATE FUNCTION accuracy_change (accuracy_change_limit double, fl_round int)
+RETURNS boolean
+BEGIN
+    RETURN
+    SELECT 
+        CASE WHEN accuracy_change > accuracy_change_limit THEN 1 ELSE 0 END 
+    FROM
+    (SELECT 
+        MAX(accuracy) - MIN(accuracy) AS accuracy_change 
+    FROM oserverevaluationaggregation 
+    WHERE server_round BETWEEN (fl_round-6) AND (fl_round-1)) as t1;
+END;
+
+## SE ATINGIU LIMITE DE TEMPO DE TREINAMENTO -> ex: dobro do tempo
+CREATE FUNCTION training_time_change (training_limit double, fl_round int)
+RETURNS boolean
+BEGIN
+    RETURN
+    SELECT 
+        CASE WHEN training_time_change < training_limit THEN 1 ELSE 0 END
+    FROM
+    (SELECT 
+        MAX(evaluation_time)/MIN(evaluation_time) AS training_time_change 
+    FROM oserverevaluationaggregation 
+    WHERE server_round BETWEEN (fl_round-6) AND (fl_round-1)) as t1;
+END;
