@@ -61,11 +61,11 @@ RUN mvn -f DfAnalyzer/pom.xml clean package
 RUN cd library/dfa-lib-python && make install
 
 # Specify volumes to applications on container-side
-VOLUME ["/dataflow_analyzer/applications/flower-studies", "/dataflow_analyzer/applications/flowering"]
+VOLUME ["/dataflow_analyzer/applications/flowering"]
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 # Specify port to expose on container-side
-EXPOSE 22000 50000 8082
+EXPOSE 22000 50000 8080
 
 COPY DfAnalyzer/start-dfanalyzer.sh DfAnalyzer/start-dfanalyzer.sh
 CMD ["/bin/bash"]

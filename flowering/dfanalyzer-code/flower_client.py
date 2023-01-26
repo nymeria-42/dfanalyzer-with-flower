@@ -155,12 +155,21 @@ class Client(NumPyClient):
             training_metrics[metric_name] = training_metrics_history.history[
                 metric_name
             ][-1]
+        # Get the Last Epoch's Validation Metrics (If Validation Split > 0).
+        if fit_config["validation_split"] > 0:
+            for metric_name in training_metrics_history.history.keys():
+                if "val_" in metric_name:
+                    training_metrics[metric_name] = training_metrics_history.history[metric_name][-1]
+        # Add the Fit Time to the Training Metrics.
+        training_metrics.update({"fit_time": fit_time_end})
 
         to_dfanalyzer = [
             self.client_id,
             fit_config["fl_round"],
             fit_time_end,
             training_metrics[metric_name],
+            fit_config["validation_split"],
+            fit_config["validation_batch_size"],
             str(self.get_parameters(fit_config))[:10000],
             time.ctime(),
         ]
@@ -168,20 +177,17 @@ class Client(NumPyClient):
         t8.add_dataset(t8_output)
         t8.end()
 
-        # Add the Fit Time to the Training Metrics.
-        training_metrics.update({"fit_time": fit_time_end})
         # Return the Model's Local Weights, Number of Training Examples, and Training Metrics to be Sent to the Server.
         return weight_tensors_list, num_training_examples, training_metrics
 
-    def evaluate(
-        self, global_model_current_parameters: NDArrays, evaluate_config: dict
-    ) -> Tuple[float, int, dict]:
+    def evaluate(self,
+                 global_model_current_parameters: NDArrays,
+                 evaluate_config: dict) -> Tuple[float, int, dict]:
         # Update the Local Model With the Global Model's Current Parameters (Weights).
         self.model.set_weights(global_model_current_parameters)
         # Replace All "None" String Values with None Type (Necessary Workaround on Flower v1.1.0).
-        evaluate_config = {
-            k: (None if v == "None" else v) for k, v in evaluate_config.items()
-        }
+        evaluate_config = {k: (None if v == "None" else v) for k, v in evaluate_config.items()}
+
         # Log the Testing Configuration Received from the Server (If Logger is Enabled for "DEBUG" Level).
         message = "[Client {0} | FL Round {1}] Evaluate Config: {2}".format(
             self.client_id, evaluate_config["fl_round"], evaluate_config
@@ -317,6 +323,25 @@ class FlowerClient:
                     elif item.replace(".", "", 1).isdigit():
                         aux_list[index] = float(item)
                 parsed_section[key] = tuple(aux_list)
+            elif not findall(r"%\(.*?\)s+", value) and findall(r"\{.*?}+", value):
+                aux_dict = {}
+                aux_list = value.replace("{", "").replace("}", "").replace(" ", "").split(",")
+                for item in aux_list:
+                    pair_item = item.split(":")
+                    pair_key = pair_item[0]
+                    pair_value = pair_item[1]
+                    if pair_value == "None":
+                        pair_value = None
+                    elif pair_value in ["True", "Yes"]:
+                        pair_value = True
+                    elif pair_value in ["False", "No"]:
+                        pair_value = False
+                    elif pair_value.isdigit():
+                        pair_value = int(value)
+                    elif pair_value.replace(".", "", 1).isdigit():
+                        pair_value = float(value)
+                    aux_dict.update({pair_key: pair_value})
+                parsed_section[key] = aux_dict
         return parsed_section
 
     def set_attribute(self, attribute_name: str, attribute_value: Any) -> None:
@@ -335,15 +360,19 @@ class FlowerClient:
         # Parse 'General Settings' and Set Attributes.
         general_settings = self.parse_config_section(cp, "General Settings")
         self.set_attribute("general_settings", general_settings)
-        # Parse 'Logging Settings' and Set Attributes.
-        logging_settings = self.parse_config_section(cp, "Logging Settings")
-        self.set_attribute("logging_settings", logging_settings)
+        # If Logging is Enabled...
+        if general_settings["enable_logging"]:
+            # Parse 'Logging Settings' and Set Attributes.
+            logging_settings = self.parse_config_section(cp, "Logging Settings")
+            self.set_attribute("logging_settings", logging_settings)
         # Parse 'FL Settings' and Set Attributes.
         fl_settings = self.parse_config_section(cp, "FL Settings")
         self.set_attribute("fl_settings", fl_settings)
-        # Parse 'SSL Settings' and Set Attributes.
-        ssl_settings = self.parse_config_section(cp, "SSL Settings")
-        self.set_attribute("ssl_settings", ssl_settings)
+        # If SSL is Enabled...
+        if fl_settings["enable_ssl"]:
+            # Parse 'SSL Settings' and Set Attributes.
+            ssl_settings = self.parse_config_section(cp, "SSL Settings")
+            self.set_attribute("ssl_settings", ssl_settings)
         # Parse 'gRPC Settings' and Set Attributes.
         grpc_settings = self.parse_config_section(cp, "gRPC Settings")
         self.set_attribute("grpc_settings", grpc_settings)

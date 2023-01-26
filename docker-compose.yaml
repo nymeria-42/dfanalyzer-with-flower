@@ -22,7 +22,7 @@ services:
     environment:
       - DFA_URL=http://localhost:22000
     # ports: 
-    #  - 8082:8082
+    #  - 8080:8080
     volumes:
       - ./flowering:/dataflow_analyzer/applications/flowering
     working_dir: "/dataflow_analyzer/applications/flowering/"
