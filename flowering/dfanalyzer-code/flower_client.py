@@ -159,17 +159,19 @@ class Client(NumPyClient):
         if fit_config["validation_split"] > 0:
             for metric_name in training_metrics_history.history.keys():
                 if "val_" in metric_name:
-                    training_metrics[metric_name] = training_metrics_history.history[metric_name][-1]
+                    training_metrics[metric_name] = training_metrics_history.history[
+                        metric_name
+                    ][-1]
         # Add the Fit Time to the Training Metrics.
         training_metrics.update({"fit_time": fit_time_end})
-
         to_dfanalyzer = [
             self.client_id,
             fit_config["fl_round"],
             fit_time_end,
-            training_metrics[metric_name],
-            fit_config["validation_split"],
-            fit_config["validation_batch_size"],
+            training_metrics["sparse_categorical_accuracy"],
+            training_metrics["loss"],
+            training_metrics.get("val_loss", None),
+            training_metrics.get("val_sparse_categorical_accuracy", None),
             str(self.get_parameters(fit_config))[:10000],
             time.ctime(),
         ]
@@ -180,13 +182,15 @@ class Client(NumPyClient):
         # Return the Model's Local Weights, Number of Training Examples, and Training Metrics to be Sent to the Server.
         return weight_tensors_list, num_training_examples, training_metrics
 
-    def evaluate(self,
-                 global_model_current_parameters: NDArrays,
-                 evaluate_config: dict) -> Tuple[float, int, dict]:
+    def evaluate(
+        self, global_model_current_parameters: NDArrays, evaluate_config: dict
+    ) -> Tuple[float, int, dict]:
         # Update the Local Model With the Global Model's Current Parameters (Weights).
         self.model.set_weights(global_model_current_parameters)
         # Replace All "None" String Values with None Type (Necessary Workaround on Flower v1.1.0).
-        evaluate_config = {k: (None if v == "None" else v) for k, v in evaluate_config.items()}
+        evaluate_config = {
+            k: (None if v == "None" else v) for k, v in evaluate_config.items()
+        }
 
         # Log the Testing Configuration Received from the Server (If Logger is Enabled for "DEBUG" Level).
         message = "[Client {0} | FL Round {1}] Evaluate Config: {2}".format(
@@ -325,7 +329,9 @@ class FlowerClient:
                 parsed_section[key] = tuple(aux_list)
             elif not findall(r"%\(.*?\)s+", value) and findall(r"\{.*?}+", value):
                 aux_dict = {}
-                aux_list = value.replace("{", "").replace("}", "").replace(" ", "").split(",")
+                aux_list = (
+                    value.replace("{", "").replace("}", "").replace(" ", "").split(",")
+                )
                 for item in aux_list:
                     pair_item = item.split(":")
                     pair_key = pair_item[0]
@@ -530,8 +536,8 @@ class FlowerClient:
         cp.read(filenames=client_config_file, encoding="utf-8")
         ml_model_settings = self.get_attribute("ml_model_settings")
         ml_model = None
-        t3 = Task(3, dataflow_tag, "ModelConfig")
-        t3.begin()
+        t4 = Task(4, dataflow_tag, "ModelConfig")
+        t4.begin()
         attributes = [
             "model",
             "optimizer",
@@ -576,9 +582,9 @@ class FlowerClient:
 
         else:
             to_dfanalyzer += [None, 0, None, None, None, None, 0, None]
-        t3_output = DataSet("oModelConfig", [Element(to_dfanalyzer)])
-        t3.add_dataset(t3_output)
-        t3.end()
+        t4_output = DataSet("oModelConfig", [Element(to_dfanalyzer)])
+        t4.add_dataset(t4_output)
+        t4.end()
         # Unbind ConfigParser Object (Garbage Collector).
 
         # Preprocess x_train and x_test (MobileNetV2 Expects the [-1, 1] Pixel Values Range).
@@ -600,8 +606,8 @@ class FlowerClient:
         cp.read(filenames=client_config_file, encoding="utf-8")
         ml_model_settings = self.get_attribute("ml_model_settings")
         ml_model_optimizer = None
-        t4 = Task(4, dataflow_tag, "OptimizerConfig")
-        t4.begin()
+        t5 = Task(5, dataflow_tag, "OptimizerConfig")
+        t5.begin()
         if ml_model_settings["optimizer"] == "SGD":
             # Parse 'SGD Settings'.
             sgd_settings = self.parse_config_section(cp, "SGD Settings")
@@ -614,10 +620,10 @@ class FlowerClient:
             )
             attributes = ["learning_rate", "momentum", "nesterov", "name"]
             to_dfanalyzer = [sgd_settings.get(attr, None) for attr in attributes]
-            t4_output = DataSet("oOptimizerConfig", [Element(to_dfanalyzer)])
-            t4.add_dataset(t4_output)
+            t5_output = DataSet("oOptimizerConfig", [Element(to_dfanalyzer)])
+            t5.add_dataset(t5_output)
 
-        t4.end()
+        t5.end()
         # Unbind ConfigParser Object (Garbage Collector).
         del cp
         return ml_model_optimizer
@@ -631,8 +637,8 @@ class FlowerClient:
         cp.read(filenames=client_config_file, encoding="utf-8")
         ml_model_settings = self.get_attribute("ml_model_settings")
         ml_model_loss_function = None
-        t5 = Task(5, dataflow_tag, "LossConfig")
-        t5.begin()
+        t6 = Task(6, dataflow_tag, "LossConfig")
+        t6.begin()
         if ml_model_settings["loss_function"] == "SparseCategoricalCrossentropy":
             # Parse 'SparseCategoricalCrossentropy Settings'.
             scc_settings = self.parse_config_section(
@@ -647,10 +653,10 @@ class FlowerClient:
             )
             attributes = ["from_logits", "ignore_class", "reduction", "name"]
             to_dfanalyzer = [scc_settings.get(attr, None) for attr in attributes]
-            t5_output = DataSet("oLossConfig", [Element(to_dfanalyzer)])
-            t5.add_dataset(t5_output)
+            t6_output = DataSet("oLossConfig", [Element(to_dfanalyzer)])
+            t6.add_dataset(t6_output)
 
-        t5.end()
+        t6.end()
         # Unbind ConfigParser Object (Garbage Collector).
         del cp
         return ml_model_loss_function

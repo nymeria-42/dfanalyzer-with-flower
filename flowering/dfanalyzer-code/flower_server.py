@@ -96,7 +96,9 @@ class FlowerServer:
                 parsed_section[key] = tuple(aux_list)
             elif not findall(r"%\(.*?\)s+", value) and findall(r"\{.*?}+", value):
                 aux_dict = {}
-                aux_list = value.replace("{", "").replace("}", "").replace(" ", "").split(",")
+                aux_list = (
+                    value.replace("{", "").replace("}", "").replace(" ", "").split(",")
+                )
                 for item in aux_list:
                     pair_item = item.split(":")
                     pair_key = pair_item[0]
@@ -144,7 +146,7 @@ class FlowerServer:
             "round_timeout_in_seconds",
             "accept_rounds_containing_failures",
             "enable_ssl",
-            "enable_hyper_parameters_dynamic_adjustment",
+            "enable_dynamic_adjustment",
             "server_aggregation_strategy",
             "fraction_fit",
             "fraction_evaluate",
@@ -185,40 +187,79 @@ class FlowerServer:
         t1.add_dataset(t1_output)
         t1.end()
         # Parse 'Training Hyper-parameters Settings' and Set Attributes.
-        training_hyper_parameters_settings = self.parse_config_section(cp, "Training Hyper-parameters Settings")
-        self.set_attribute("training_hyper_parameters_settings", training_hyper_parameters_settings)
+        training_hyper_parameters_settings = self.parse_config_section(
+            cp, "Training Hyper-parameters Settings"
+        )
+        self.set_attribute(
+            "training_hyper_parameters_settings", training_hyper_parameters_settings
+        )
         # Parse 'Testing Hyper-parameters Settings' and Set Attributes.
-        testing_hyper_parameters_settings = self.parse_config_section(cp, "Testing Hyper-parameters Settings")
-        self.set_attribute("testing_hyper_parameters_settings", testing_hyper_parameters_settings)
+        testing_hyper_parameters_settings = self.parse_config_section(
+            cp, "Testing Hyper-parameters Settings"
+        )
+        self.set_attribute(
+            "testing_hyper_parameters_settings", testing_hyper_parameters_settings
+        )
         # If Dynamic Adjustment of Hyper-parameters is Enabled...
         if fl_settings["enable_hyper_parameters_dynamic_adjustment"]:
             # Parse 'Hyper-parameters Dynamic Adjustment Settings' and Set Attributes.
-            hyper_parameters_dynamic_adjustment_settings = \
-                self.parse_config_section(cp, "Hyper-parameters Dynamic Adjustment Settings")
-            self.set_attribute("hyper_parameters_dynamic_adjustment_settings",
-                               hyper_parameters_dynamic_adjustment_settings)
+            hyper_parameters_dynamic_adjustment_settings = self.parse_config_section(
+                cp, "Hyper-parameters Dynamic Adjustment Settings"
+            )
+            self.set_attribute(
+                "hyper_parameters_dynamic_adjustment_settings",
+                hyper_parameters_dynamic_adjustment_settings,
+            )
             # Parse 'Adjustments Policies Settings' and Set Attributes.
-            adjustments_policies_settings = self.parse_config_section(cp, "Adjustments Policies Settings")
-            self.set_attribute("adjustments_policies_settings", adjustments_policies_settings)
+            adjustments_policies_settings = self.parse_config_section(
+                cp, "Adjustments Policies Settings"
+            )
+            self.set_attribute(
+                "adjustments_policies_settings", adjustments_policies_settings
+            )
             # If Dynamic Adjustment of Training Hyper-parameters is Enabled...
-            if hyper_parameters_dynamic_adjustment_settings["dynamically_adjust_training_hyper_parameters"]:
+            if hyper_parameters_dynamic_adjustment_settings[
+                "dynamically_adjust_training_hyper_parameters"
+            ]:
                 # Parse 'Training Hyper-parameters Dynamic Adjustment Settings' and Set Attributes.
-                training_hyper_parameters_dynamic_adjustment_settings = \
-                    self.parse_config_section(cp, "Training Hyper-parameters Dynamic Adjustment Settings")
-                self.set_attribute("training_hyper_parameters_dynamic_adjustment_settings",
-                                   training_hyper_parameters_dynamic_adjustment_settings)
+                training_hyper_parameters_dynamic_adjustment_settings = (
+                    self.parse_config_section(
+                        cp, "Training Hyper-parameters Dynamic Adjustment Settings"
+                    )
+                )
+                self.set_attribute(
+                    "training_hyper_parameters_dynamic_adjustment_settings",
+                    training_hyper_parameters_dynamic_adjustment_settings,
+                )
             # If Dynamic Adjustment of Testing Hyper-parameters is Enabled...
-            if hyper_parameters_dynamic_adjustment_settings["dynamically_adjust_testing_hyper_parameters"]:
+            if hyper_parameters_dynamic_adjustment_settings[
+                "dynamically_adjust_testing_hyper_parameters"
+            ]:
                 # Parse 'Testing Hyper-parameters Dynamic Adjustment Settings' and Set Attributes.
-                testing_hyper_parameters_dynamic_adjustment_settings = \
-                    self.parse_config_section(cp, "Testing Hyper-parameters Dynamic Adjustment Settings")
-                self.set_attribute("testing_hyper_parameters_dynamic_adjustment_settings",
-                                   testing_hyper_parameters_dynamic_adjustment_settings)
+                testing_hyper_parameters_dynamic_adjustment_settings = (
+                    self.parse_config_section(
+                        cp, "Testing Hyper-parameters Dynamic Adjustment Settings"
+                    )
+                )
+                self.set_attribute(
+                    "testing_hyper_parameters_dynamic_adjustment_settings",
+                    testing_hyper_parameters_dynamic_adjustment_settings,
+                )
             # If MonetDB is the Hyper-parameters Adjustments Eligibility Controller...
-            if hyper_parameters_dynamic_adjustment_settings["adjustments_eligibility_controller"] == "MonetDB":
+            if (
+                hyper_parameters_dynamic_adjustment_settings[
+                    "adjustments_eligibility_controller"
+                ]
+                == "MonetDB"
+            ):
+
+                ###########################
+                # -------- MODIFIED --------
                 # Parse 'MonetDB Settings' and Set Attributes.
-                monetdb_settings = self.parse_config_section(cp, "MonetDB Settings")
+                monetdb_settings = cp["MonetDB Settings"]
                 self.set_attribute("monetdb_settings", monetdb_settings)
+                ###########################
+
         # Unbind ConfigParser Object (Garbage Collector).
         del cp
 
@@ -275,24 +316,30 @@ class FlowerServer:
         return None
 
     def load_initial_fit_config(self) -> dict:
-        training_hyper_parameters_settings = self.get_attribute("training_hyper_parameters_settings")
+        training_hyper_parameters_settings = self.get_attribute(
+            "training_hyper_parameters_settings"
+        )
         fit_config = {"fl_round": 0}
         fit_config.update(training_hyper_parameters_settings)
         # Log the Initial Training Configuration (If Logger is Enabled for "DEBUG" Level).
-        message = "[Server {0} | FL Round {1}] Initial Fit Config: {2}".format(self.get_attribute("server_id"),
-                                                                               fit_config["fl_round"],
-                                                                               fit_config)
+        message = "[Server {0} | FL Round {1}] Initial Fit Config: {2}".format(
+            self.get_attribute("server_id"), fit_config["fl_round"], fit_config
+        )
         self.log_message(message, "DEBUG")
         return fit_config
 
     def load_initial_evaluate_config(self) -> dict:
-        testing_hyper_parameters_settings = self.get_attribute("testing_hyper_parameters_settings")
+        testing_hyper_parameters_settings = self.get_attribute(
+            "testing_hyper_parameters_settings"
+        )
         evaluate_config = {"fl_round": 0}
         evaluate_config.update(testing_hyper_parameters_settings)
         # Log the Initial Testing Configuration (If Logger is Enabled for "DEBUG" Level).
-        message = "[Server {0} | FL Round {1}] Initial Evaluate Config: {2}".format(self.get_attribute("server_id"),
-                                                                                    evaluate_config["fl_round"],
-                                                                                    evaluate_config)
+        message = "[Server {0} | FL Round {1}] Initial Evaluate Config: {2}".format(
+            self.get_attribute("server_id"),
+            evaluate_config["fl_round"],
+            evaluate_config,
+        )
         self.log_message(message, "DEBUG")
         return evaluate_config
 
@@ -313,7 +360,7 @@ class FlowerServer:
 
     @staticmethod
     def evaluate_fn(
-        fl_round: int, global_model_current_parameters: NDArrays, evaluate_config: dict
+        fl_round: int, global_model_parameters: NDArrays, evaluate_config: dict
     ) -> Optional[Metrics]:
         """Server-side (Centralized) evaluation function called by Flower after every training round.
         \nRequires a server-side dataset to evaluate the newly aggregated model without sending it to the Clients.
@@ -322,80 +369,120 @@ class FlowerServer:
         # TODO: To Implement (If Ever Needed)...
         return None
 
-    def is_enabled_hyper_parameters_dynamic_adjustment(self,
-                                                       phase: str) -> bool:
-        hyper_parameters_dynamic_adjustment_settings = \
-            self.get_attribute("hyper_parameters_dynamic_adjustment_settings")
+    def is_enabled_hyper_parameters_dynamic_adjustment(self, phase: str) -> bool:
+        hyper_parameters_dynamic_adjustment_settings = self.get_attribute(
+            "hyper_parameters_dynamic_adjustment_settings"
+        )
         if hyper_parameters_dynamic_adjustment_settings:
             if phase == "train":
-                return hyper_parameters_dynamic_adjustment_settings["dynamically_adjust_training_hyper_parameters"]
+                return hyper_parameters_dynamic_adjustment_settings[
+                    "dynamically_adjust_training_hyper_parameters"
+                ]
             elif phase == "test":
-                return hyper_parameters_dynamic_adjustment_settings["dynamically_adjust_testing_hyper_parameters"]
+                return hyper_parameters_dynamic_adjustment_settings[
+                    "dynamically_adjust_testing_hyper_parameters"
+                ]
         return False
 
-    def execute_random_eligibility(self,
-                                   phase: str) -> bool:
+    def execute_random_eligibility(self, phase: str) -> bool:
         random_eligibility_start = perf_counter()
         is_fl_round_eligible = choice([True, False])
         random_eligibility_end = perf_counter() - random_eligibility_start
-        message = "[Server {0}] Finished Executing the Random Eligibility ({1}ing Phase) in {2} Seconds." \
-            .format(self.get_attribute("server_id"),
-                    phase.capitalize(),
-                    random_eligibility_end)
+        message = "[Server {0}] Finished Executing the Random Eligibility ({1}ing Phase) in {2} Seconds.".format(
+            self.get_attribute("server_id"), phase.capitalize(), random_eligibility_end
+        )
         self.log_message(message, "INFO")
         return is_fl_round_eligible
 
-    def execute_monetdb_eligibility_query(self,
-                                          phase: str) -> bool:
+    def execute_monetdb_eligibility_query(self, phase: str) -> bool:
         monetdb_eligibility_query_start = perf_counter()
         monetdb_settings = self.get_attribute("monetdb_settings")
         adjustments_eligibility_query = None
         if phase == "train":
-            adjustments_eligibility_query = monetdb_settings["training_adjustments_eligibility_query"]
+            adjustments_eligibility_query = monetdb_settings[
+                "training_adjustments_eligibility_query"
+            ]
         elif phase == "test":
-            adjustments_eligibility_query = monetdb_settings["testing_adjustments_eligibility_query"]
+            adjustments_eligibility_query = monetdb_settings[
+                "testing_adjustments_eligibility_query"
+            ]
         if adjustments_eligibility_query is None:
             return False
-        connection = connect(hostname=monetdb_settings["hostname"],
-                             port=monetdb_settings["port"],
-                             username=monetdb_settings["username"],
-                             password=monetdb_settings["password"],
-                             database=monetdb_settings["database"])
+        connection = connect(
+            hostname=monetdb_settings["hostname"],
+            port=monetdb_settings["port"],
+            username=monetdb_settings["username"],
+            password=monetdb_settings["password"],
+            database=monetdb_settings["database"],
+        )
+
         cursor = connection.cursor()
-        cursor.execute(operation=adjustments_eligibility_query)
-        query_result = int(cursor.fetchone()[0])
+
+        result = None
+        tries = 0
+        fl_round = self.get_attribute("fl_round")
+        while tries < 10 and not result:
+            cursor.execute(
+                monetdb_settings["check_if_last_round_is_already_recorded"].format(
+                    fl_round
+                )
+            )
+            connection.commit()
+            result = cursor.fetchone()
+
+            if result:
+                result = result[-1]
+            tries += 1
+            time.sleep(0.05)
+
+        if result:
+            cursor.execute(operation=adjustments_eligibility_query.format(fl_round))
+            query_result = int(cursor.fetchone()[0])
+        else:
+            query_result = 0
         cursor.close()
         connection.close()
         is_fl_round_eligible = True if query_result == 1 else False
         monetdb_eligibility_query_end = perf_counter() - monetdb_eligibility_query_start
-        message = "[Server {0}] Finished Executing the MonetDB Eligibility Query ({1}ing Phase) in {2} Seconds." \
-            .format(self.get_attribute("server_id"),
-                    phase.capitalize(),
-                    monetdb_eligibility_query_end)
+        message = "[Server {0}] Finished Executing the MonetDB Eligibility Query ({1}ing Phase) in {2} Seconds.".format(
+            self.get_attribute("server_id"),
+            phase.capitalize(),
+            monetdb_eligibility_query_end,
+        )
         self.log_message(message, "INFO")
         return is_fl_round_eligible
 
-    def is_fl_round_eligible_for_hyper_parameters_dynamic_adjustment(self,
-                                                                     phase: str) -> bool:
-        hyper_parameters_dynamic_adjustment_settings = \
-            self.get_attribute("hyper_parameters_dynamic_adjustment_settings")
-        initial_round_candidate_for_adjustments = \
-            hyper_parameters_dynamic_adjustment_settings["initial_round_candidate_for_adjustments"]
+    def is_fl_round_eligible_for_hyper_parameters_dynamic_adjustment(
+        self, phase: str
+    ) -> bool:
+        hyper_parameters_dynamic_adjustment_settings = self.get_attribute(
+            "hyper_parameters_dynamic_adjustment_settings"
+        )
+        initial_round_candidate_for_adjustments = (
+            hyper_parameters_dynamic_adjustment_settings[
+                "initial_round_candidate_for_adjustments"
+            ]
+        )
         fl_round = self.get_attribute("fl_round")
         if fl_round < initial_round_candidate_for_adjustments:
             return False
-        adjustments_eligibility_controller = \
-            hyper_parameters_dynamic_adjustment_settings["adjustments_eligibility_controller"]
+        adjustments_eligibility_controller = (
+            hyper_parameters_dynamic_adjustment_settings[
+                "adjustments_eligibility_controller"
+            ]
+        )
         if adjustments_eligibility_controller == "Random":
             return self.execute_random_eligibility(phase)
         if adjustments_eligibility_controller == "MonetDB":
             return self.execute_monetdb_eligibility_query(phase)
 
-    def adjust_hyper_parameter_value(self,
-                                     old_value: Any,
-                                     adjustment_policy: str) -> Any:
+    def adjust_hyper_parameter_value(
+        self, old_value: Any, adjustment_policy: str
+    ) -> Any:
         adjusted_value = None
-        adjustment_operation_text = self.get_attribute("adjustments_policies_settings")[adjustment_policy]
+        adjustment_operation_text = self.get_attribute("adjustments_policies_settings")[
+            adjustment_policy
+        ]
         if "boolean" in adjustment_policy:
             if adjustment_operation_text == "Flip":
                 adjusted_value = not old_value
@@ -418,123 +505,76 @@ class FlowerServer:
                     adjusted_value = int(adjusted_value)
         return adjusted_value
 
-    def dynamically_adjust_hyper_parameters(self,
-                                            phase: str,
-                                            config: dict) -> dict:
+    def dynamically_adjust_hyper_parameters(self, phase: str, config: dict) -> dict:
         config_name = None
         hyper_parameters_to_adjust = None
         if phase == "train":
             config_name = "Fit Config"
-            hyper_parameters_to_adjust = \
-                self.get_attribute("training_hyper_parameters_dynamic_adjustment_settings")["to_adjust"]
+            hyper_parameters_to_adjust = self.get_attribute(
+                "training_hyper_parameters_dynamic_adjustment_settings"
+            )["to_adjust"]
         elif phase == "test":
             config_name = "Evaluate Config"
-            hyper_parameters_to_adjust = \
-                self.get_attribute("testing_hyper_parameters_dynamic_adjustment_settings")["to_adjust"]
-        adjustments_policies_settings = self.get_attribute("adjustments_policies_settings")
+            hyper_parameters_to_adjust = self.get_attribute(
+                "testing_hyper_parameters_dynamic_adjustment_settings"
+            )["to_adjust"]
+        adjustments_policies_settings = self.get_attribute(
+            "adjustments_policies_settings"
+        )
         if hyper_parameters_to_adjust:
-            for hyper_parameter, adjustment_policy in hyper_parameters_to_adjust.items():
-                if hyper_parameter in config and adjustment_policy in adjustments_policies_settings:
+            for (
+                hyper_parameter,
+                adjustment_policy,
+            ) in hyper_parameters_to_adjust.items():
+                if (
+                    hyper_parameter in config
+                    and adjustment_policy in adjustments_policies_settings
+                ):
                     hyper_parameter_old_value = config[hyper_parameter]
-                    hyper_parameter_new_value = self.adjust_hyper_parameter_value(hyper_parameter_old_value,
-                                                                                  adjustment_policy)
+                    hyper_parameter_new_value = self.adjust_hyper_parameter_value(
+                        hyper_parameter_old_value, adjustment_policy
+                    )
                     config.update({hyper_parameter: hyper_parameter_new_value})
             # Log the Dynamic Configuration Adjustment Notice (If Logger is Enabled for "INFO" Level).
-            message = "[Server {0} | FL Round {1}] {2} Dynamically Adjusted (Eligible FL Round)."\
-                .format(self.get_attribute("server_id"),
-                        self.get_attribute("fl_round"),
-                        config_name)
+            message = "[Server {0} | FL Round {1}] {2} Dynamically Adjusted (Eligible FL Round).".format(
+                self.get_attribute("server_id"),
+                self.get_attribute("fl_round"),
+                config_name,
+            )
             self.log_message(message, "INFO")
         return config
 
-
     def on_fit_config_fn(self, fl_round: int) -> Optional[dict]:
         """Training configuration function called by Flower before each training round."""
+        # Update the Current FL Round (Necessary Workaround on Flower v1.1.0).
+        self.set_attribute("fl_round", fl_round)
+        # Log the Current FL Round (If Logger is Enabled for "INFO" Level).
+        message = "[Server {0}] Current FL Round: {1}".format(
+            self.get_attribute("server_id"), self.get_attribute("fl_round")
+        )
+        self.log_message(message, "INFO")
         # Get the Training Configuration.
         fit_config = self.get_attribute("fit_config")
         # Update the Training Configuration's Current FL Round.
         fit_config.update({"fl_round": self.get_attribute("fl_round")})
         # Dynamically Adjust the Training Configuration's Hyper-parameters (If Enabled and Eligible).
         if self.is_enabled_hyper_parameters_dynamic_adjustment("train"):
-            if self.is_fl_round_eligible_for_hyper_parameters_dynamic_adjustment("train"):
-                fit_config = self.dynamically_adjust_hyper_parameters("train",
-                                                                      fit_config)
+            if self.is_fl_round_eligible_for_hyper_parameters_dynamic_adjustment(
+                "train"
+            ):
+                fit_config = self.dynamically_adjust_hyper_parameters(
+                    "train", fit_config
+                )
+                dynamically_adjusted = True
         # Store the Training Configuration Changes.
         self.set_attribute("fit_config", fit_config)
         # Log the Training Configuration (If Logger is Enabled for "DEBUG" Level).
-        message = "[Server {0} | FL Round {1}] Fit Config: {2}".format(self.get_attribute("server_id"),
-                                                                       fit_config["fl_round"],
-                                                                       fit_config)
+        message = "[Server {0} | FL Round {1}] Fit Config: {2}".format(
+            self.get_attribute("server_id"), fit_config["fl_round"], fit_config
+        )
         self.log_message(message, "DEBUG")
         # Replace All Values of None Type to "None" String (Necessary Workaround on Flower v1.1.0).
         fit_config = {k: ("None" if v is None else v) for k, v in fit_config.items()}
-
-        if fl_round != 1:
-            conn = pymonetdb.connect(
-                username="monetdb",
-                password="monetdb",
-                hostname="localhost",
-                port="50000",
-                database="dataflow_analyzer",
-            )
-            cursor = conn.cursor()
-            # cursor.arraysize = 100
-            result = None
-            tries = 0
-
-            while tries < 5 and not result:
-                cursor.execute(
-                    "SELECT accuracy FROM oserverevaluationaggregation WHERE server_round = ({}-1)".format(
-                        fl_round
-                    )
-                )
-                conn.commit()
-                result = cursor.fetchone()
-                if result:
-                    result = result[-1]
-                tries += 1
-                time.sleep(0.05)
-
-            # fetch only one row
-            message = "Previous result (accuracy): {0}".format(result)
-            self.log_message(message, "INFO")
-
-            accuracy_threshold = 0.3
-            cursor.execute(
-                "SELECT accuracy_threshold({}, {})".format(accuracy_threshold, fl_round)
-            )
-            result = cursor.fetchone()[-1]
-            message = "Accuracy threshold: {0}".format(result)
-            self.log_message(message, "INFO")
-
-            if result and fl_round > 2:
-                accuracy_change_limit = 0.05
-                cursor.execute(
-                    "SELECT accuracy_change({}, {})".format(
-                        accuracy_change_limit, fl_round
-                    )
-                )
-                result = cursor.fetchone()
-                if result:
-                    result = result[-1]
-                message = "Accuracy change: {0}".format(result)
-                self.log_message(message, "INFO")
-
-                if result:
-                    training_time_change = 2  # limit: two times slower
-                    cursor.execute(
-                        "SELECT training_time_change({}, {})".format(
-                            training_time_change, fl_round
-                        )
-                    )
-                    result = cursor.fetchone()
-                    if result:
-                        result = result[-1]
-                    message = "Training time change: {0}".format(result)
-                    self.log_message(message, "INFO")
-
-            cursor.close()
-            conn.close()
 
         t7 = Task(7 + 6 * (fl_round - 1), dataflow_tag, "TrainingConfig")
         if fl_round == 1:
@@ -552,7 +592,7 @@ class FlowerServer:
                 )
             )
 
-        to_dfanalyzer = [fl_round, time.ctime()]
+        to_dfanalyzer = [fl_round, dynamically_adjusted, time.ctime()]
 
         t7_input = DataSet("iTrainingConfig", [Element(to_dfanalyzer)])
         t7.add_dataset(t7_input)
@@ -584,8 +624,9 @@ class FlowerServer:
         # Update the Current FL Round (Necessary Workaround on Flower v1.1.0).
         self.set_attribute("fl_round", fl_round)
         # Log the Current FL Round (If Logger is Enabled for "INFO" Level).
-        message = "[Server {0}] Current FL Round: {1}".format(self.get_attribute("server_id"),
-                                                              self.get_attribute("fl_round"))
+        message = "[Server {0}] Current FL Round: {1}".format(
+            self.get_attribute("server_id"), self.get_attribute("fl_round")
+        )
         self.log_message(message, "INFO")
         # Get the Testing Configuration.
         evaluate_config = self.get_attribute("evaluate_config")
@@ -593,18 +634,25 @@ class FlowerServer:
         evaluate_config.update({"fl_round": self.get_attribute("fl_round")})
         # Dynamically Adjust the Testing Configuration's Hyper-parameters (If Enabled and Eligible).
         if self.is_enabled_hyper_parameters_dynamic_adjustment("test"):
-            if self.is_fl_round_eligible_for_hyper_parameters_dynamic_adjustment("test"):
-                evaluate_config = self.dynamically_adjust_hyper_parameters("test",
-                                                                           evaluate_config)
+            if self.is_fl_round_eligible_for_hyper_parameters_dynamic_adjustment(
+                "test"
+            ):
+                evaluate_config = self.dynamically_adjust_hyper_parameters(
+                    "test", evaluate_config
+                )
         # Store the Testing Configuration Changes.
         self.set_attribute("evaluate_config", evaluate_config)
         # Log the Testing Configuration (If Logger is Enabled for "DEBUG" Level).
-        message = "[Server {0} | FL Round {1}] Evaluate Config: {2}".format(self.get_attribute("server_id"),
-                                                                            evaluate_config["fl_round"],
-                                                                            evaluate_config)
+        message = "[Server {0} | FL Round {1}] Evaluate Config: {2}".format(
+            self.get_attribute("server_id"),
+            evaluate_config["fl_round"],
+            evaluate_config,
+        )
         self.log_message(message, "DEBUG")
         # Replace All Values of None Type to "None" String (Necessary Workaround on Flower v1.1.0).
-        evaluate_config = {k: ("None" if v is None else v) for k, v in evaluate_config.items()}
+        evaluate_config = {
+            k: ("None" if v is None else v) for k, v in evaluate_config.items()
+        }
         # Return the Testing Configuration to be Sent to All Participating Clients.
 
         t10 = Task(
@@ -617,9 +665,7 @@ class FlowerServer:
         )
         t10.begin()
         attributes = ["batch_size", "steps"]
-        to_dfanalyzer = [
-            evaluate_config.get(attr, 0) for attr in attributes
-        ]
+        to_dfanalyzer = [evaluate_config.get(attr, 0) for attr in attributes]
 
         t10_output = DataSet("oEvaluationConfig", [Element(to_dfanalyzer)])
         t10.add_dataset(t10_output)
@@ -788,19 +834,22 @@ class FlowerServer:
         t2.begin()
         if fl_settings["server_aggregation_strategy"] == "FedAvg":
             # FedAvg - Federated Averaging Aggregation Strategy.
-            server_aggregation_strategy = \
-                FedAvg(fraction_fit=fl_settings["fraction_fit"],
-                       fraction_evaluate=fl_settings["fraction_evaluate"],
-                       min_fit_clients=fl_settings["min_fit_clients"],
-                       min_evaluate_clients=fl_settings["min_evaluate_clients"],
-                       min_available_clients=fl_settings["min_available_clients"],
-                       evaluate_fn=self.evaluate_fn,
-                       on_fit_config_fn=self.on_fit_config_fn,
-                       on_evaluate_config_fn=self.on_evaluate_config_fn,
-                       accept_failures=fl_settings["accept_rounds_containing_failures"],
-                       initial_parameters=self.get_attribute("initial_global_model_parameters"),
-                       fit_metrics_aggregation_fn=self.fit_metrics_aggregation_fn,
-                       evaluate_metrics_aggregation_fn=self.evaluate_metrics_aggregation_fn)
+            server_aggregation_strategy = FedAvg(
+                fraction_fit=fl_settings["fraction_fit"],
+                fraction_evaluate=fl_settings["fraction_evaluate"],
+                min_fit_clients=fl_settings["min_fit_clients"],
+                min_evaluate_clients=fl_settings["min_evaluate_clients"],
+                min_available_clients=fl_settings["min_available_clients"],
+                evaluate_fn=self.evaluate_fn,
+                on_fit_config_fn=self.on_fit_config_fn,
+                on_evaluate_config_fn=self.on_evaluate_config_fn,
+                accept_failures=fl_settings["accept_rounds_containing_failures"],
+                initial_parameters=self.get_attribute(
+                    "initial_global_model_parameters"
+                ),
+                fit_metrics_aggregation_fn=self.fit_metrics_aggregation_fn,
+                evaluate_metrics_aggregation_fn=self.evaluate_metrics_aggregation_fn,
+            )
             t2_output = DataSet("oStrategy", [Element([0, 0])])
             t2.add_dataset(t2_output)
 
@@ -808,21 +857,24 @@ class FlowerServer:
             # Parse 'FedAvgM Settings'.
             fed_avg_m_settings = self.parse_config_section(cp, "FedAvgM Settings")
             # FedAvgM - Federated Averaging with Server Momentum Aggregation Strategy.
-            server_aggregation_strategy = \
-                FedAvgM(fraction_fit=fl_settings["fraction_fit"],
-                        fraction_evaluate=fl_settings["fraction_evaluate"],
-                        min_fit_clients=fl_settings["min_fit_clients"],
-                        min_evaluate_clients=fl_settings["min_evaluate_clients"],
-                        min_available_clients=fl_settings["min_available_clients"],
-                        evaluate_fn=self.evaluate_fn,
-                        on_fit_config_fn=self.on_fit_config_fn,
-                        on_evaluate_config_fn=self.on_evaluate_config_fn,
-                        accept_failures=fl_settings["accept_rounds_containing_failures"],
-                        initial_parameters=self.get_attribute("initial_global_model_parameters"),
-                        fit_metrics_aggregation_fn=self.fit_metrics_aggregation_fn,
-                        evaluate_metrics_aggregation_fn=self.evaluate_metrics_aggregation_fn,
-                        server_learning_rate=fed_avg_m_settings["server_learning_rate"],
-                        server_momentum=fed_avg_m_settings["server_momentum"])
+            server_aggregation_strategy = FedAvgM(
+                fraction_fit=fl_settings["fraction_fit"],
+                fraction_evaluate=fl_settings["fraction_evaluate"],
+                min_fit_clients=fl_settings["min_fit_clients"],
+                min_evaluate_clients=fl_settings["min_evaluate_clients"],
+                min_available_clients=fl_settings["min_available_clients"],
+                evaluate_fn=self.evaluate_fn,
+                on_fit_config_fn=self.on_fit_config_fn,
+                on_evaluate_config_fn=self.on_evaluate_config_fn,
+                accept_failures=fl_settings["accept_rounds_containing_failures"],
+                initial_parameters=self.get_attribute(
+                    "initial_global_model_parameters"
+                ),
+                fit_metrics_aggregation_fn=self.fit_metrics_aggregation_fn,
+                evaluate_metrics_aggregation_fn=self.evaluate_metrics_aggregation_fn,
+                server_learning_rate=fed_avg_m_settings["server_learning_rate"],
+                server_momentum=fed_avg_m_settings["server_momentum"],
+            )
 
             attributes = ["server_learning_rate", "server_momentum"]
             to_dfanalyzer = [fed_avg_m_settings.get(attr, None) for attr in attributes]
@@ -859,11 +911,20 @@ class FlowerServer:
         if fl_settings["enable_ssl"]:
             ssl_settings = self.get_attribute("ssl_settings")
             prefix_path = Path("./FlowerServer_" + str(self.get_attribute("server_id")))
-            ca_certificate_bytes = prefix_path.joinpath(ssl_settings["ca_certificate_file"]).read_bytes()
-            server_certificate_bytes = prefix_path.joinpath(ssl_settings["server_certificate_file"]).read_bytes()
-            server_rsa_private_key_bytes = \
-                prefix_path.joinpath(ssl_settings["server_rsa_private_key_file"]).read_bytes()
-            ssl_certificates = (ca_certificate_bytes, server_certificate_bytes, server_rsa_private_key_bytes)
+            ca_certificate_bytes = prefix_path.joinpath(
+                ssl_settings["ca_certificate_file"]
+            ).read_bytes()
+            server_certificate_bytes = prefix_path.joinpath(
+                ssl_settings["server_certificate_file"]
+            ).read_bytes()
+            server_rsa_private_key_bytes = prefix_path.joinpath(
+                ssl_settings["server_rsa_private_key_file"]
+            ).read_bytes()
+            ssl_certificates = (
+                ca_certificate_bytes,
+                server_certificate_bytes,
+                server_rsa_private_key_bytes,
+            )
         return ssl_certificates
 
     def start_flower_server(self) -> None:
@@ -906,7 +967,7 @@ def main() -> None:
             Attribute("round_timeout_in_seconds", AttributeType.NUMERIC),
             Attribute("accept_rounds_with_failures", AttributeType.TEXT),
             Attribute("enable_ssl", AttributeType.TEXT),
-            Attribute("enable_hyper_parameters_dynamic_adjustment", AttributeType.TEXT),
+            Attribute("enable_dynamic_adjustment", AttributeType.TEXT),
             Attribute("server_aggregation_strategy", AttributeType.TEXT),
             Attribute("fraction_fit", AttributeType.NUMERIC),
             Attribute("fraction_evaluate", AttributeType.NUMERIC),
@@ -1004,6 +1065,7 @@ def main() -> None:
         SetType.INPUT,
         [
             Attribute("server_round", AttributeType.NUMERIC),
+            Attribute("dynamically_adjusted", AttributeType.TEXT),
             Attribute("starting_time", AttributeType.TEXT),
         ],
     )
@@ -1054,8 +1116,9 @@ def main() -> None:
             Attribute("server_round", AttributeType.NUMERIC),
             Attribute("training_time", AttributeType.NUMERIC),
             Attribute("accuracy", AttributeType.NUMERIC),
-            Attribute("validation_split", AttributeType.NUMERIC),
-            Attribute("validation_batch_size", AttributeType.TEXT),
+            Attribute("loss", AttributeType.NUMERIC),
+            Attribute("val_loss", AttributeType.NUMERIC),
+            Attribute("val_accuracy", AttributeType.TEXT),
             Attribute("local_weights", AttributeType.TEXT),
             Attribute("ending_time", AttributeType.TEXT),
         ],
@@ -1219,41 +1282,56 @@ def main() -> None:
                 database="dataflow_analyzer",
             )
             cursor = conn.cursor()
-
             cursor.execute(
-                """ CREATE FUNCTION accuracy_threshold (threshold double, fl_round int)
-                RETURNS boolean
-                BEGIN
-                    RETURN
-                    SELECT 
-                        CASE WHEN accuracy < threshold THEN 1 ELSE 0 END
-                    FROM 
-                        (SELECT accuracy FROM oserverevaluationaggregation WHERE server_round = (fl_round-1)) as t1;
-                END;"""
+                """
+            CREATE OR REPLACE FUNCTION check_metrics (fl_round int)
+            RETURNS table (accuracy double, loss double, val_accuracy double, val_loss double, training_time double, accuracy_evaluation double, loss_evaluation double)
+            BEGIN
+                RETURN
+            SELECT
+                MIN(ct.accuracy),
+                MAX(ct.loss),
+                MIN(ct.val_accuracy),
+                MAX(ct.val_loss),
+                MAX(ct.training_time),
+                MIN(ce.accuracy),
+                MAX(ce.loss)
+            FROM
+                oclienttraining AS ct
+            JOIN oclientevaluation AS ce
+            ON
+                ct.server_round = ce.server_round
+            WHERE
+                ct.server_round = fl_round
+            END;"""
             )
 
             cursor.execute(
-                """CREATE FUNCTION accuracy_change (accuracy_change_limit double, fl_round int)
-                RETURNS boolean
-                BEGIN
-                    RETURN
-                    SELECT 
-                        CASE WHEN accuracy_change > accuracy_change_limit THEN 1 ELSE 0 END 
-                    FROM
-                        (SELECT MAX(accuracy) - MIN(accuracy) AS accuracy_change FROM oserverevaluationaggregation WHERE server_round BETWEEN (fl_round-6) AND (fl_round-1)) as t1;
-                END;"""
-            )
-
-            cursor.execute(
-                """CREATE FUNCTION training_time_change (training_limit double, fl_round int)
-                RETURNS boolean
-                BEGIN
-                    RETURN
-                    SELECT 
-                        CASE WHEN training_time_change < training_limit THEN 1 ELSE 0 END
-                    FROM
-                        (SELECT MAX(training_time)/MIN(training_time) AS training_time_change FROM oservertrainingaggregation WHERE server_round BETWEEN (fl_round-6) AND (fl_round-1)) as t1;
-                END;"""
+                """CREATE FUNCTION update_hyperparameters (threshold double,
+            limit_training_time double,
+            limit_accuracy_change double,
+            fl_round int)
+            RETURNS boolean
+            BEGIN
+                RETURN
+                SELECT
+                DISTINCT
+                    CASE
+                        WHEN last_value(accuracy_evaluation) OVER () < threshold
+                        AND (last_value(training_time) OVER () / first_value(training_time) OVER () > limit_training_time
+                        OR last_value(accuracy) OVER () - first_value(accuracy) OVER () < limit_accuracy_change
+                        OR last_value(accuracy_evaluation) OVER () - first_value(accuracy_evaluation) OVER () < limit_accuracy_change
+                        OR ( first_value(accuracy) OVER () <  last_value(accuracy) OVER ()
+                        AND first_value(val_accuracy) OVER () > last_value(val_accuracy) OVER ())) 
+                        THEN 1
+                        ELSE 0
+                    END
+                FROM
+                    (
+                    SELECT * FROM check_metrics(fl_round - 3)
+                    UNION 
+                    SELECT * FROM check_metrics(fl_round - 1)) AS t1;
+            END;"""
             )
 
             conn.commit()
