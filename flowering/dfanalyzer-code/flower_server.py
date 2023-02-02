@@ -408,6 +408,7 @@ class FlowerServer:
             ]
         if adjustments_eligibility_query is None:
             return False
+
         connection = connect(
             hostname=monetdb_settings["hostname"],
             port=monetdb_settings["port"],
@@ -421,7 +422,7 @@ class FlowerServer:
         result = None
         tries = 0
         fl_round = self.get_attribute("fl_round")
-        while tries < 10 and not result:
+        while tries < 100 and not result:
             cursor.execute(
                 monetdb_settings["check_if_last_round_is_already_recorded"].format(
                     fl_round
@@ -558,6 +559,7 @@ class FlowerServer:
         # Update the Training Configuration's Current FL Round.
         fit_config.update({"fl_round": self.get_attribute("fl_round")})
         # Dynamically Adjust the Training Configuration's Hyper-parameters (If Enabled and Eligible).
+        dynamically_adjusted = False
         if self.is_enabled_hyper_parameters_dynamic_adjustment("train"):
             if self.is_fl_round_eligible_for_hyper_parameters_dynamic_adjustment(
                 "train"
@@ -566,6 +568,7 @@ class FlowerServer:
                     "train", fit_config
                 )
                 dynamically_adjusted = True
+
         # Store the Training Configuration Changes.
         self.set_attribute("fit_config", fit_config)
         # Log the Training Configuration (If Logger is Enabled for "DEBUG" Level).
@@ -1272,7 +1275,7 @@ def main() -> None:
 
     df.save()
     tries = 0
-    while tries < 10:
+    while tries < 100:
         try:
             conn = pymonetdb.connect(
                 username="monetdb",
@@ -1302,7 +1305,7 @@ def main() -> None:
             ON
                 ct.server_round = ce.server_round
             WHERE
-                ct.server_round = fl_round
+                ct.server_round = fl_round;
             END;"""
             )
 
@@ -1314,23 +1317,28 @@ def main() -> None:
             RETURNS boolean
             BEGIN
                 RETURN
-                SELECT
-                DISTINCT
-                    CASE
-                        WHEN last_value(accuracy_evaluation) OVER () < threshold
-                        AND (last_value(training_time) OVER () / first_value(training_time) OVER () > limit_training_time
-                        OR last_value(accuracy) OVER () - first_value(accuracy) OVER () < limit_accuracy_change
-                        OR last_value(accuracy_evaluation) OVER () - first_value(accuracy_evaluation) OVER () < limit_accuracy_change
-                        OR ( first_value(accuracy) OVER () <  last_value(accuracy) OVER ()
-                        AND first_value(val_accuracy) OVER () > last_value(val_accuracy) OVER ())) 
-                        THEN 1
-                        ELSE 0
-                    END
-                FROM
-                    (
-                    SELECT * FROM check_metrics(fl_round - 3)
-                    UNION 
-                    SELECT * FROM check_metrics(fl_round - 1)) AS t1;
+                SELECT 
+                    CASE WHEN (SELECT DISTINCT dynamically_adjusted FROM itrainingconfig
+                    WHERE server_round BETWEEN fl_round - 3 AND fl_round - 1 AND dynamically_adjusted = 'True') IS NOT NULL THEN 0 
+                        ELSE (
+                    SELECT
+                    DISTINCT
+                        CASE
+                            WHEN last_value(accuracy_evaluation) OVER () < threshold
+                            AND (last_value(training_time) OVER () / first_value(training_time) OVER () > limit_training_time
+                            OR last_value(accuracy) OVER () - first_value(accuracy) OVER () < limit_accuracy_change
+                            OR last_value(accuracy_evaluation) OVER () - first_value(accuracy_evaluation) OVER () < limit_accuracy_change
+                            OR ( first_value(accuracy) OVER () <  last_value(accuracy) OVER ()
+                            AND first_value(val_accuracy) OVER () > last_value(val_accuracy) OVER ())) 
+                            THEN 1
+                            ELSE 0
+                        END
+                    FROM
+                        (
+                        SELECT * FROM check_metrics(fl_round - 2)
+                        UNION 
+                        SELECT * FROM check_metrics(fl_round - 1)) AS t1)
+                    END;
             END;"""
             )
 
