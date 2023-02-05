@@ -1236,13 +1236,7 @@ def main() -> None:
         SetType.INPUT,
         [
             Attribute("server_round", AttributeType.NUMERIC),
-            Attribute("starting_time", AttributeType.TEXT),
-            Attribute("total_num_clients", AttributeType.NUMERIC),
-            Attribute("total_num_examples", AttributeType.NUMERIC),
-            Attribute("accuracy", AttributeType.NUMERIC),
-            Attribute("loss", AttributeType.NUMERIC),
-            Attribute("evaluation_time", AttributeType.NUMERIC),
-            Attribute("ending_time", AttributeType.TEXT),
+            Attribute("starting_time", AttributeType.TEXT)
         ],
     )
     tf12_output = Set(
@@ -1319,7 +1313,7 @@ def main() -> None:
                 RETURN
                 SELECT 
                     CASE WHEN (SELECT DISTINCT dynamically_adjusted FROM itrainingconfig
-                    WHERE server_round BETWEEN fl_round - 3 AND fl_round - 1 AND dynamically_adjusted = 'True') IS NOT NULL THEN 0 
+                    WHERE server_round BETWEEN fl_round - 2 AND fl_round - 1 AND dynamically_adjusted = 'True') IS NOT NULL THEN 0 
                         ELSE (
                     SELECT
                     DISTINCT

@@ -1,2 +1,0 @@
-pymonetdb==1.6.3
-pillow==9.4.0
