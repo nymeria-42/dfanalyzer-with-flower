@@ -89,13 +89,10 @@ class Client(NumPyClient):
         t8.add_dependency(
             Dependency(
                 [
-                    "modelconfig",
-                    "optimizerconfig",
                     "lossconfig",
-                    "datasetload",
                     "trainingconfig",
                 ],
-                ["3", "4", "5", "6", str(6 + 6 * (fit_config["fl_round"] - 1))],
+                ["6", str(7 + 6 * (fit_config["fl_round"] - 1))],
             )
         )
 
@@ -536,7 +533,12 @@ class FlowerClient:
         cp.read(filenames=client_config_file, encoding="utf-8")
         ml_model_settings = self.get_attribute("ml_model_settings")
         ml_model = None
-        t4 = Task(4, dataflow_tag, "ModelConfig")
+        t4 = Task(
+            4,
+            dataflow_tag,
+            "ModelConfig",
+            dependency=Task(3, dataflow_tag, "DatasetLoad"),
+        )
         t4.begin()
         attributes = [
             "model",
@@ -606,7 +608,12 @@ class FlowerClient:
         cp.read(filenames=client_config_file, encoding="utf-8")
         ml_model_settings = self.get_attribute("ml_model_settings")
         ml_model_optimizer = None
-        t5 = Task(5, dataflow_tag, "OptimizerConfig")
+        t5 = Task(
+            5,
+            dataflow_tag,
+            "OptimizerConfig",
+            dependency=Task(4, dataflow_tag, "ModelConfig"),
+        )
         t5.begin()
         if ml_model_settings["optimizer"] == "SGD":
             # Parse 'SGD Settings'.
@@ -637,7 +644,12 @@ class FlowerClient:
         cp.read(filenames=client_config_file, encoding="utf-8")
         ml_model_settings = self.get_attribute("ml_model_settings")
         ml_model_loss_function = None
-        t6 = Task(6, dataflow_tag, "LossConfig")
+        t6 = Task(
+            6,
+            dataflow_tag,
+            "LossConfig",
+            dependency=Task(5, dataflow_tag, "OptmizerConfig"),
+        )
         t6.begin()
         if ml_model_settings["loss_function"] == "SparseCategoricalCrossentropy":
             # Parse 'SparseCategoricalCrossentropy Settings'.

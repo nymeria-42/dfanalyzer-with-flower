@@ -583,15 +583,15 @@ class FlowerServer:
         if fl_round == 1:
             t7.add_dependency(
                 Dependency(
-                    ["serverconfig", "strategy", "serverevaluationaggregation"],
-                    ["1", "2", "0"],
+                    ["strategy", "serverevaluationaggregation"],
+                    ["2", "0"],
                 )
             )
         else:
             t7.add_dependency(
                 Dependency(
-                    ["serverconfig", "strategy", "serverevaluationaggregation"],
-                    ["1", "2", str(12 + 6 * (fl_round - 2))],
+                    ["strategy", "serverevaluationaggregation"],
+                    ["2", str(12 + 6 * (fl_round - 2))],
                 )
             )
 
@@ -833,7 +833,17 @@ class FlowerServer:
         cp.read(filenames=server_config_file, encoding="utf-8")
         fl_settings = self.get_attribute("fl_settings")
         server_aggregation_strategy = None
-        t2 = Task(2, dataflow_tag, "Strategy")
+        t2 = Task(
+            2,
+            dataflow_tag,
+            "Strategy",
+            dependency=Task(
+                1,
+                dataflow_tag,
+                "ServerConfig",
+            ),
+        )
+
         t2.begin()
         if fl_settings["server_aggregation_strategy"] == "FedAvg":
             # FedAvg - Federated Averaging Aggregation Strategy.
@@ -993,7 +1003,10 @@ def main() -> None:
         ],
     )
 
-    tf2.set_sets([tf2_output])
+    tf1_output.set_type(SetType.INPUT)
+    tf1_output.dependency = tf1._tag
+
+    tf2.set_sets([tf1_output, tf2_output])
     df.add_transformation(tf2)
 
     tf3 = Transformation("DatasetLoad")
@@ -1031,7 +1044,11 @@ def main() -> None:
             Attribute("classifier_activation", AttributeType.TEXT),
         ],
     )
-    tf4.set_sets([tf4_output])
+
+    tf3_output.set_type(SetType.INPUT)
+    tf3_output.dependency = tf3._tag
+
+    tf4.set_sets([tf3_output, tf4_output])
     df.add_transformation(tf4)
 
     tf5 = Transformation("OptimizerConfig")
@@ -1045,7 +1062,11 @@ def main() -> None:
             Attribute("name", AttributeType.TEXT),
         ],
     )
-    tf5.set_sets([tf5_output])
+
+    tf4_output.set_type(SetType.INPUT)
+    tf4_output.dependency = tf4._tag
+
+    tf5.set_sets([tf4_output, tf5_output])
     df.add_transformation(tf5)
 
     tf6 = Transformation("LossConfig")
@@ -1059,7 +1080,11 @@ def main() -> None:
             Attribute("name", AttributeType.TEXT),
         ],
     )
-    tf6.set_sets([tf6_output])
+
+    tf5_output.set_type(SetType.INPUT)
+    tf5_output.dependency = tf5._tag
+
+    tf6.set_sets([tf5_output, tf6_output])
     df.add_transformation(tf6)
 
     tf7 = Transformation("TrainingConfig")
@@ -1089,13 +1114,10 @@ def main() -> None:
         ],
     )
 
-    tf1_output.set_type(SetType.INPUT)
-    tf1_output.dependency = tf1._tag
-
     tf2_output.set_type(SetType.INPUT)
     tf2_output.dependency = tf2._tag
 
-    tf7.set_sets([tf1_output, tf2_output, tf7_input, tf7_output])
+    tf7.set_sets([tf2_output, tf7_input, tf7_output])
 
     df.add_transformation(tf7)
 
@@ -1127,15 +1149,6 @@ def main() -> None:
         ],
     )
 
-    tf3_output.set_type(SetType.INPUT)
-    tf3_output.dependency = tf3._tag
-
-    tf4_output.set_type(SetType.INPUT)
-    tf4_output.dependency = tf4._tag
-
-    tf5_output.set_type(SetType.INPUT)
-    tf5_output.dependency = tf5._tag
-
     tf6_output.set_type(SetType.INPUT)
     tf6_output.dependency = tf6._tag
 
@@ -1144,9 +1157,6 @@ def main() -> None:
 
     tf8.set_sets(
         [
-            tf3_output,
-            tf4_output,
-            tf5_output,
             tf6_output,
             tf7_output,
             tf8_input,
@@ -1236,7 +1246,7 @@ def main() -> None:
         SetType.INPUT,
         [
             Attribute("server_round", AttributeType.NUMERIC),
-            Attribute("starting_time", AttributeType.TEXT)
+            Attribute("starting_time", AttributeType.TEXT),
         ],
     )
     tf12_output = Set(
