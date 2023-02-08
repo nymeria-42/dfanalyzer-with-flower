@@ -88,25 +88,18 @@ class Client(NumPyClient):
         t8 = Task(8 + 6 * (fit_config["fl_round"] - 1), dataflow_tag, "ClientTraining")
         t8.add_dependency(
             Dependency(
-                [
+                 [
+                    "datasetload",
+                    "modelconfig",
+                    "optimizerconfig",
                     "lossconfig",
                     "trainingconfig",
                 ],
-                ["6", str(7 + 6 * (fit_config["fl_round"] - 1))],
+                ["3", "4", "5", "6", str(7 + 6 * (fit_config["fl_round"] - 1))],
             )
         )
-
+        starting_time = time.ctime()
         t8.begin()
-
-        to_dfanalyzer = [
-            self.client_id,
-            fit_config["fl_round"],
-            len(self.x_train),
-            str(global_model_current_parameters)[:10000],
-            time.ctime(),
-        ]
-        t8_input = DataSet("iClientTraining", [Element(to_dfanalyzer)])
-        t8.add_dataset(t8_input)
 
         # Replace All "None" String Values with None Type (Necessary Workaround on Flower v1.1.0).
         fit_config = {k: (None if v == "None" else v) for k, v in fit_config.items()}
@@ -165,13 +158,17 @@ class Client(NumPyClient):
             self.client_id,
             fit_config["fl_round"],
             fit_time_end,
+            len(self.x_train),
+            str(global_model_current_parameters)[:10000],
             training_metrics["sparse_categorical_accuracy"],
             training_metrics["loss"],
             training_metrics.get("val_loss", None),
             training_metrics.get("val_sparse_categorical_accuracy", None),
             str(self.get_parameters(fit_config))[:10000],
-            time.ctime(),
+            starting_time,
+            time.ctime()
         ]
+
         t8_output = DataSet("oClientTraining", [Element(to_dfanalyzer)])
         t8.add_dataset(t8_output)
         t8.end()
@@ -210,16 +207,10 @@ class Client(NumPyClient):
                 "EvaluationConfig",
             ),
         )
-
+        
+        starting_time = time.ctime()
+        
         t11.begin()
-        to_dfanalyzer = [
-            self.client_id,
-            evaluate_config["fl_round"],
-            len(self.x_test),
-            time.ctime(),
-        ]
-        t11_input = DataSet("iClientEvaluation", [Element(to_dfanalyzer)])
-        t11.add_dataset(t11_input)
 
         # Start the Evaluate Model Timser.
         evaluate_time_start = perf_counter()
@@ -252,6 +243,8 @@ class Client(NumPyClient):
             testing_metrics["loss"],
             evaluate_time_end,
             testing_metrics[metric_name],
+            len(self.x_test),
+            starting_time,
             time.ctime(),
         ]
         t11_output = DataSet("oClientEvaluation", [Element(to_dfanalyzer)])
@@ -536,8 +529,7 @@ class FlowerClient:
         t4 = Task(
             4,
             dataflow_tag,
-            "ModelConfig",
-            dependency=Task(3, dataflow_tag, "DatasetLoad"),
+            "ModelConfig"
         )
         t4.begin()
         attributes = [
@@ -584,7 +576,9 @@ class FlowerClient:
 
         else:
             to_dfanalyzer += [None, 0, None, None, None, None, 0, None]
-        t4_output = DataSet("oModelConfig", [Element(to_dfanalyzer)])
+        t4_input = DataSet("iModelConfig", [Element(to_dfanalyzer)])
+        t4.add_dataset(t4_input)
+        t4_output = DataSet("oModelConfig", [Element([])])
         t4.add_dataset(t4_output)
         t4.end()
         # Unbind ConfigParser Object (Garbage Collector).
@@ -611,8 +605,7 @@ class FlowerClient:
         t5 = Task(
             5,
             dataflow_tag,
-            "OptimizerConfig",
-            dependency=Task(4, dataflow_tag, "ModelConfig"),
+            "OptimizerConfig"
         )
         t5.begin()
         if ml_model_settings["optimizer"] == "SGD":
@@ -627,9 +620,10 @@ class FlowerClient:
             )
             attributes = ["learning_rate", "momentum", "nesterov", "name"]
             to_dfanalyzer = [sgd_settings.get(attr, None) for attr in attributes]
-            t5_output = DataSet("oOptimizerConfig", [Element(to_dfanalyzer)])
-            t5.add_dataset(t5_output)
-
+            t5_input = DataSet("iOptimizerConfig", [Element(to_dfanalyzer)])
+            t5.add_dataset(t5_input)
+        t5_output = DataSet("oOptimizerConfig", [Element([])])
+        t5.add_dataset(t5_output)
         t5.end()
         # Unbind ConfigParser Object (Garbage Collector).
         del cp
@@ -647,8 +641,7 @@ class FlowerClient:
         t6 = Task(
             6,
             dataflow_tag,
-            "LossConfig",
-            dependency=Task(5, dataflow_tag, "OptmizerConfig"),
+            "LossConfig"
         )
         t6.begin()
         if ml_model_settings["loss_function"] == "SparseCategoricalCrossentropy":
@@ -665,9 +658,10 @@ class FlowerClient:
             )
             attributes = ["from_logits", "ignore_class", "reduction", "name"]
             to_dfanalyzer = [scc_settings.get(attr, None) for attr in attributes]
-            t6_output = DataSet("oLossConfig", [Element(to_dfanalyzer)])
-            t6.add_dataset(t6_output)
-
+            t6_input = DataSet("iLossConfig", [Element(to_dfanalyzer)])
+            t6.add_dataset(t6_input)
+        t6_output = DataSet("oLossConfig", [Element(to_dfanalyzer)])
+        t6.add_dataset(t6_output)
         t6.end()
         # Unbind ConfigParser Object (Garbage Collector).
         del cp
@@ -802,7 +796,9 @@ def main() -> None:
 
     end = perf_counter()
     to_dfanalyzer = [client_id, end - start]
-    t6_output = DataSet("oDatasetLoad", [Element(to_dfanalyzer)])
+    t6_input = DataSet("iDatasetLoad", [Element(to_dfanalyzer)])
+    t6.add_dataset(t6_input)
+    t6_output = DataSet("oDatasetLoad", [Element([])])
     t6.add_dataset(t6_output)
     t6.end()
     # Instantiate and Set ML Model.
