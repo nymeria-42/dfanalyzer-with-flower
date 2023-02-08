@@ -739,6 +739,8 @@ class FlowerServer:
             total_num_examples,
             aggregated_metrics["sparse_categorical_accuracy"],
             aggregated_metrics["loss"],
+            aggregated_metrics["val_sparse_categorical_accuracy"],
+            aggregated_metrics["val_loss"],
             aggregated_metrics["fit_time"],
             starting_time,
             time.ctime(),
@@ -1164,6 +1166,8 @@ def main() -> None:
             Attribute("total_num_examples", AttributeType.NUMERIC),
             Attribute("accuracy", AttributeType.NUMERIC),
             Attribute("loss", AttributeType.NUMERIC),
+            Attribute("val_accuracy", AttributeType.NUMERIC),
+            Attribute("val_loss", AttributeType.NUMERIC),
             Attribute("training_time", AttributeType.NUMERIC),
             Attribute("starting_time", AttributeType.TEXT),
             Attribute("ending_time", AttributeType.TEXT),
@@ -1258,27 +1262,29 @@ def main() -> None:
                 database="dataflow_analyzer",
             )
             cursor = conn.cursor()
-            cursor.execuste(
+            cursor.execute(
                 """
             CREATE OR REPLACE FUNCTION check_metrics (fl_round int)
-            RETURNS table (accuracy double, loss double, val_accuracy double, val_loss double, training_time double, accuracy_evaluation double, loss_evaluation double)
+            RETURNS table (training_time double, accuracy_training double, loss_training double, 
+                val_accuracy double, val_loss double, accuracy_evaluation double, loss_evaluation double)
             BEGIN
                 RETURN
-            SELECT
-                MIN(ct.accuracy),
-                MAX(ct.loss),
-                MIN(ct.val_accuracy),
-                MAX(ct.val_loss),
-                MAX(ct.training_time),
-                MIN(ce.accuracy),
-                MAX(ce.loss)
-            FROM
-                oclienttraining AS ct
-            JOIN oclientevaluation AS ce
-            ON
-                ct.server_round = ce.server_round
-            WHERE
-                ct.server_round = fl_round;
+                SELECT
+                    st.training_time,
+                    st.accuracy,
+                    st.loss,
+                    st.val_accuracy,
+                    st.val_loss,
+                    se.accuracy,
+                    se.loss
+                FROM
+                    oservertrainingaggregation as st
+                JOIN 
+                    oserverevaluationaggregation as se
+                ON
+                    st.server_round = se.server_round
+                WHERE
+                    st.server_round = fl_round;
             END;"""
             )
 
@@ -1299,9 +1305,9 @@ def main() -> None:
                         CASE
                             WHEN last_value(accuracy_evaluation) OVER () < threshold
                             AND (last_value(training_time) OVER () / first_value(training_time) OVER () > limit_training_time
-                            OR last_value(accuracy) OVER () - first_value(accuracy) OVER () < limit_accuracy_change
+                            OR last_value(accuracy_training) OVER () - first_value(accuracy_training) OVER () < limit_accuracy_change
                             OR last_value(accuracy_evaluation) OVER () - first_value(accuracy_evaluation) OVER () < limit_accuracy_change
-                            OR ( first_value(accuracy) OVER () <  last_value(accuracy) OVER ()
+                            OR ( first_value(accuracy_training) OVER () <  last_value(accuracy_training) OVER ()
                             AND first_value(val_accuracy) OVER () > last_value(val_accuracy) OVER ())) 
                             THEN 1
                             ELSE 0
@@ -1319,7 +1325,7 @@ def main() -> None:
             cursor.close()
             conn.close()
             break
-        except:
+        except Exception as e:
             time.sleep(1)
             tries += 1
 
