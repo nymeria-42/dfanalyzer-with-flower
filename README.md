@@ -4,21 +4,21 @@ A partir da pasta contendo Dockerfile e arquivos a serem copiados para o contain
 
 ```bash
 sudo service docker start
-sudo docker build -t dfanalyzer .
+docker build -t dfanalyzer .
 ```
 
 Para criar dataset_partitions
 ```bash
-cd dataset-splitter && virtualenv venv && . venv/bin/activate && pip install -r requirements.txt && python splitter.py
+git clone git@github.com:alan-lira/dataset-splitter.git -b develop
 ```
 
 Para iniciar o DfAnalyzer:
 
 ```bash
-sudo docker-compose up dfanalyzer
+docker-compose up dfanalyzer
 ```
 
-- A pasta criada é usada como volume aqui para inserção no MonetDB
+- A pasta com as partições criada é usada como volume aqui para inserção no MonetDB
 
 Para carregar dados do particionamento no MonetDB:
 
@@ -29,19 +29,19 @@ cd dataset_partitions_monetdb && virtualenv venv && . venv/bin/activate && pip i
 Para iniciar o servidor do flower:
 
 ```bash
-sudo docker-compose up server
+docker compose up server
 ```
 
 Para iniciar um cliente:
 
 ```bash
-sudo docker-compose up client
+docker compose up client
 ```
 
 Para iniciar 5 clientes com o dataset já particionado:
 
 ```bash
-sudo docker-compose up client1 client2 client3 client4 client5
+docker compose up client1 client2 client3 client4 client5
 ```
 
 É possível, então, consultar o banco MonetDB:
