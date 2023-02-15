@@ -9,5 +9,5 @@ COPY (
 		tc.validation_split,
 		tc.validation_batch_size
 	FROM
-		otrainingconfig as tc)
+		itrainingconfig as tc)
 INTO 'training_config.csv' ON CLIENT USING DELIMITERS ',', '\n', '"';
