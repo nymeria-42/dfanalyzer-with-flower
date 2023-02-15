@@ -60,7 +60,9 @@ class FlowerServer:
 
     @staticmethod
     def parse_config_section(config_parser: ConfigParser, section_name: str) -> dict:
-        parsed_section = {key: value for key, value in config_parser[section_name].items()}
+        parsed_section = {
+            key: value for key, value in config_parser[section_name].items()
+        }
         for key, value in parsed_section.items():
             if value == "None":
                 parsed_section[key] = None
@@ -73,7 +75,9 @@ class FlowerServer:
             elif value.replace(".", "", 1).isdigit():
                 parsed_section[key] = float(value)
             elif not findall(r"%\(.*?\)s+", value) and findall(r"\[.*?]+", value):
-                aux_list = value.replace("[", "").replace("]", "").replace(" ", "").split(",")
+                aux_list = (
+                    value.replace("[", "").replace("]", "").replace(" ", "").split(",")
+                )
                 for index, item in enumerate(aux_list):
                     if item.isdigit():
                         aux_list[index] = int(item)
@@ -81,7 +85,9 @@ class FlowerServer:
                         aux_list[index] = float(item)
                 parsed_section[key] = aux_list
             elif not findall(r"%\(.*?\)s+", value) and findall(r"\(.*?\)+", value):
-                aux_list = value.replace("(", "").replace(")", "").replace(" ", "").split(",")
+                aux_list = (
+                    value.replace("(", "").replace(")", "").replace(" ", "").split(",")
+                )
                 for index, item in enumerate(aux_list):
                     if item.isdigit():
                         aux_list[index] = int(item)
@@ -90,7 +96,9 @@ class FlowerServer:
                 parsed_section[key] = tuple(aux_list)
             elif not findall(r"%\(.*?\)s+", value) and findall(r"\{.*?}+", value):
                 aux_dict = {}
-                aux_list = value.replace("{", "").replace("}", "").replace(" ", "").split(",")
+                aux_list = (
+                    value.replace("{", "").replace("}", "").replace(" ", "").split(",")
+                )
                 for item in aux_list:
                     pair_item = item.split(":")
                     pair_key = pair_item[0]
@@ -184,12 +192,16 @@ class FlowerServer:
         training_hyper_parameters_settings = self.parse_config_section(
             cp, "Training Hyper-parameters Settings"
         )
-        self.set_attribute("training_hyper_parameters_settings", training_hyper_parameters_settings)
+        self.set_attribute(
+            "training_hyper_parameters_settings", training_hyper_parameters_settings
+        )
         # Parse 'Testing Hyper-parameters Settings' and Set Attributes.
         testing_hyper_parameters_settings = self.parse_config_section(
             cp, "Testing Hyper-parameters Settings"
         )
-        self.set_attribute("testing_hyper_parameters_settings", testing_hyper_parameters_settings)
+        self.set_attribute(
+            "testing_hyper_parameters_settings", testing_hyper_parameters_settings
+        )
         # If Dynamic Adjustment of Hyper-parameters is Enabled...
         if fl_settings["enable_hyper_parameters_dynamic_adjustment"]:
             # Parse 'Hyper-parameters Dynamic Adjustment Settings' and Set Attributes.
@@ -204,14 +216,18 @@ class FlowerServer:
             adjustments_policies_settings = self.parse_config_section(
                 cp, "Adjustments Policies Settings"
             )
-            self.set_attribute("adjustments_policies_settings", adjustments_policies_settings)
+            self.set_attribute(
+                "adjustments_policies_settings", adjustments_policies_settings
+            )
             # If Dynamic Adjustment of Training Hyper-parameters is Enabled...
             if hyper_parameters_dynamic_adjustment_settings[
                 "dynamically_adjust_training_hyper_parameters"
             ]:
                 # Parse 'Training Hyper-parameters Dynamic Adjustment Settings' and Set Attributes.
-                training_hyper_parameters_dynamic_adjustment_settings = self.parse_config_section(
-                    cp, "Training Hyper-parameters Dynamic Adjustment Settings"
+                training_hyper_parameters_dynamic_adjustment_settings = (
+                    self.parse_config_section(
+                        cp, "Training Hyper-parameters Dynamic Adjustment Settings"
+                    )
                 )
                 self.set_attribute(
                     "training_hyper_parameters_dynamic_adjustment_settings",
@@ -222,8 +238,10 @@ class FlowerServer:
                 "dynamically_adjust_testing_hyper_parameters"
             ]:
                 # Parse 'Testing Hyper-parameters Dynamic Adjustment Settings' and Set Attributes.
-                testing_hyper_parameters_dynamic_adjustment_settings = self.parse_config_section(
-                    cp, "Testing Hyper-parameters Dynamic Adjustment Settings"
+                testing_hyper_parameters_dynamic_adjustment_settings = (
+                    self.parse_config_section(
+                        cp, "Testing Hyper-parameters Dynamic Adjustment Settings"
+                    )
                 )
                 self.set_attribute(
                     "testing_hyper_parameters_dynamic_adjustment_settings",
@@ -231,7 +249,9 @@ class FlowerServer:
                 )
             # If MonetDB is the Hyper-parameters Adjustments Eligibility Controller...
             if (
-                hyper_parameters_dynamic_adjustment_settings["adjustments_eligibility_controller"]
+                hyper_parameters_dynamic_adjustment_settings[
+                    "adjustments_eligibility_controller"
+                ]
                 == "MonetDB"
             ):
 
@@ -311,7 +331,9 @@ class FlowerServer:
         return fit_config
 
     def load_initial_evaluate_config(self) -> dict:
-        testing_hyper_parameters_settings = self.get_attribute("testing_hyper_parameters_settings")
+        testing_hyper_parameters_settings = self.get_attribute(
+            "testing_hyper_parameters_settings"
+        )
         evaluate_config = {"fl_round": 0}
         evaluate_config.update(testing_hyper_parameters_settings)
         # Log the Initial Testing Configuration (If Logger is Enabled for "DEBUG" Level).
@@ -326,7 +348,9 @@ class FlowerServer:
     def get_grpc_listen_ip_address_and_port(self) -> str:
         grpc_settings = self.get_attribute("grpc_settings")
         return (
-            grpc_settings["grpc_listen_ip_address"] + ":" + str(grpc_settings["grpc_listen_port"])
+            grpc_settings["grpc_listen_ip_address"]
+            + ":"
+            + str(grpc_settings["grpc_listen_port"])
         )
 
     def get_grpc_max_message_length_in_bytes(self) -> int:
@@ -402,7 +426,9 @@ class FlowerServer:
         fl_round = self.get_attribute("fl_round")
         while tries < 100 and not result:
             cursor.execute(
-                monetdb_settings["check_if_last_round_is_already_recorded"].format(fl_round)
+                monetdb_settings["check_if_last_round_is_already_recorded"].format(
+                    fl_round
+                )
             )
             connection.commit()
             result = cursor.fetchone()
@@ -429,25 +455,33 @@ class FlowerServer:
         self.log_message(message, "INFO")
         return is_fl_round_eligible
 
-    def is_fl_round_eligible_for_hyper_parameters_dynamic_adjustment(self, phase: str) -> bool:
+    def is_fl_round_eligible_for_hyper_parameters_dynamic_adjustment(
+        self, phase: str
+    ) -> bool:
         hyper_parameters_dynamic_adjustment_settings = self.get_attribute(
             "hyper_parameters_dynamic_adjustment_settings"
         )
-        initial_round_candidate_for_adjustments = hyper_parameters_dynamic_adjustment_settings[
-            "initial_round_candidate_for_adjustments"
-        ]
+        initial_round_candidate_for_adjustments = (
+            hyper_parameters_dynamic_adjustment_settings[
+                "initial_round_candidate_for_adjustments"
+            ]
+        )
         fl_round = self.get_attribute("fl_round")
         if fl_round < initial_round_candidate_for_adjustments:
             return False
-        adjustments_eligibility_controller = hyper_parameters_dynamic_adjustment_settings[
-            "adjustments_eligibility_controller"
-        ]
+        adjustments_eligibility_controller = (
+            hyper_parameters_dynamic_adjustment_settings[
+                "adjustments_eligibility_controller"
+            ]
+        )
         if adjustments_eligibility_controller == "Random":
             return self.execute_random_eligibility(phase)
         if adjustments_eligibility_controller == "MonetDB":
             return self.execute_monetdb_eligibility_query(phase)
 
-    def adjust_hyper_parameter_value(self, old_value: Any, adjustment_policy: str) -> Any:
+    def adjust_hyper_parameter_value(
+        self, old_value: Any, adjustment_policy: str
+    ) -> Any:
         adjusted_value = None
         adjustment_operation_text = self.get_attribute("adjustments_policies_settings")[
             adjustment_policy
@@ -487,25 +521,28 @@ class FlowerServer:
             hyper_parameters_to_adjust = self.get_attribute(
                 "testing_hyper_parameters_dynamic_adjustment_settings"
             )["to_adjust"]
-        adjustments_policies_settings = self.get_attribute("adjustments_policies_settings")
+        adjustments_policies_settings = self.get_attribute(
+            "adjustments_policies_settings"
+        )
         if hyper_parameters_to_adjust:
             for (
                 hyper_parameter,
                 adjustment_policy,
             ) in hyper_parameters_to_adjust.items():
-                if hyper_parameter in config and adjustment_policy in adjustments_policies_settings:
+                if (
+                    hyper_parameter in config
+                    and adjustment_policy in adjustments_policies_settings
+                ):
                     hyper_parameter_old_value = config[hyper_parameter]
                     hyper_parameter_new_value = self.adjust_hyper_parameter_value(
                         hyper_parameter_old_value, adjustment_policy
                     )
                     config.update({hyper_parameter: hyper_parameter_new_value})
             # Log the Dynamic Configuration Adjustment Notice (If Logger is Enabled for "INFO" Level).
-            message = (
-                "[Server {0} | FL Round {1}] {2} Dynamically Adjusted (Eligible FL Round).".format(
-                    self.get_attribute("server_id"),
-                    self.get_attribute("fl_round"),
-                    config_name,
-                )
+            message = "[Server {0} | FL Round {1}] {2} Dynamically Adjusted (Eligible FL Round).".format(
+                self.get_attribute("server_id"),
+                self.get_attribute("fl_round"),
+                config_name,
             )
             self.log_message(message, "INFO")
         return config
@@ -526,8 +563,12 @@ class FlowerServer:
         # Dynamically Adjust the Training Configuration's Hyper-parameters (If Enabled and Eligible).
         dynamically_adjusted = False
         if self.is_enabled_hyper_parameters_dynamic_adjustment("train"):
-            if self.is_fl_round_eligible_for_hyper_parameters_dynamic_adjustment("train"):
-                fit_config = self.dynamically_adjust_hyper_parameters("train", fit_config)
+            if self.is_fl_round_eligible_for_hyper_parameters_dynamic_adjustment(
+                "train"
+            ):
+                fit_config = self.dynamically_adjust_hyper_parameters(
+                    "train", fit_config
+                )
                 dynamically_adjusted = True
 
         # Store the Training Configuration Changes.
@@ -570,9 +611,12 @@ class FlowerServer:
             "validation_batch_size",
         ]
 
-        to_dfanalyzer = [fl_round, dynamically_adjusted, starting_time, time.ctime()] + [
-            fit_config.get(attr, 0) for attr in attributes
-        ]
+        to_dfanalyzer = [
+            fl_round,
+            dynamically_adjusted,
+            starting_time,
+            time.ctime(),
+        ] + [fit_config.get(attr, 0) for attr in attributes]
 
         t7_input = DataSet("iTrainingConfig", [Element(to_dfanalyzer)])
         t7.add_dataset(t7_input)
@@ -598,8 +642,12 @@ class FlowerServer:
         evaluate_config.update({"fl_round": self.get_attribute("fl_round")})
         # Dynamically Adjust the Testing Configuration's Hyper-parameters (If Enabled and Eligible).
         if self.is_enabled_hyper_parameters_dynamic_adjustment("test"):
-            if self.is_fl_round_eligible_for_hyper_parameters_dynamic_adjustment("test"):
-                evaluate_config = self.dynamically_adjust_hyper_parameters("test", evaluate_config)
+            if self.is_fl_round_eligible_for_hyper_parameters_dynamic_adjustment(
+                "test"
+            ):
+                evaluate_config = self.dynamically_adjust_hyper_parameters(
+                    "test", evaluate_config
+                )
         # Store the Testing Configuration Changes.
         self.set_attribute("evaluate_config", evaluate_config)
         # Log the Testing Configuration (If Logger is Enabled for "DEBUG" Level).
@@ -610,14 +658,18 @@ class FlowerServer:
         )
         self.log_message(message, "DEBUG")
         # Replace All Values of None Type to "None" String (Necessary Workaround on Flower v1.1.0).
-        evaluate_config = {k: ("None" if v is None else v) for k, v in evaluate_config.items()}
+        evaluate_config = {
+            k: ("None" if v is None else v) for k, v in evaluate_config.items()
+        }
         # Return the Testing Configuration to be Sent to All Participating Clients.
 
         t10 = Task(
             10 + 6 * (fl_round - 1),
             dataflow_tag,
             "EvaluationConfig",
-            dependency=Task(9 + 6 * (fl_round - 1), dataflow_tag, "ServerTrainingAggregation"),
+            dependency=Task(
+                9 + 6 * (fl_round - 1), dataflow_tag, "ServerTrainingAggregation"
+            ),
         )
         t10.begin()
         attributes = ["batch_size", "steps"]
@@ -658,7 +710,8 @@ class FlowerServer:
         metrics_products_list = []
         for metric_name in metrics_names_list:
             metric_product = [
-                num_examples * metric[metric_name] for num_examples, metric in training_metrics
+                num_examples * metric[metric_name]
+                for num_examples, metric in training_metrics
             ]
             metrics_products_list.append(metric_product)
         # Get the Total Number of Training Examples (of All Participating Clients).
@@ -667,7 +720,9 @@ class FlowerServer:
         aggregated_metrics = {}
         for metric_index in range(0, len(metrics_names_list)):
             metric_name = metrics_names_list[metric_index]
-            weighted_average_metric = sum(metrics_products_list[metric_index]) / total_num_examples
+            weighted_average_metric = (
+                sum(metrics_products_list[metric_index]) / total_num_examples
+            )
             aggregated_metrics[metric_name] = weighted_average_metric
 
         # Log the Aggregated Training Metrics (If Logger is Enabled for "INFO" Level).
@@ -729,7 +784,8 @@ class FlowerServer:
         metrics_products_list = []
         for metric_name in metrics_names_list:
             metric_product = [
-                num_examples * metric[metric_name] for num_examples, metric in testing_metrics
+                num_examples * metric[metric_name]
+                for num_examples, metric in testing_metrics
             ]
             metrics_products_list.append(metric_product)
         # Get the Total Number of Testing Examples (of All Participating Clients).
@@ -738,7 +794,9 @@ class FlowerServer:
         aggregated_metrics = {}
         for metric_index in range(0, len(metrics_names_list)):
             metric_name = metrics_names_list[metric_index]
-            weighted_average_metric = sum(metrics_products_list[metric_index]) / total_num_examples
+            weighted_average_metric = (
+                sum(metrics_products_list[metric_index]) / total_num_examples
+            )
             aggregated_metrics[metric_name] = weighted_average_metric
 
         # Log the Aggregated Testing Metrics (If Logger is Enabled for "INFO" Level).
@@ -796,7 +854,9 @@ class FlowerServer:
                 on_fit_config_fn=self.on_fit_config_fn,
                 on_evaluate_config_fn=self.on_evaluate_config_fn,
                 accept_failures=fl_settings["accept_rounds_containing_failures"],
-                initial_parameters=self.get_attribute("initial_global_model_parameters"),
+                initial_parameters=self.get_attribute(
+                    "initial_global_model_parameters"
+                ),
                 fit_metrics_aggregation_fn=self.fit_metrics_aggregation_fn,
                 evaluate_metrics_aggregation_fn=self.evaluate_metrics_aggregation_fn,
             )
@@ -817,7 +877,9 @@ class FlowerServer:
                 on_fit_config_fn=self.on_fit_config_fn,
                 on_evaluate_config_fn=self.on_evaluate_config_fn,
                 accept_failures=fl_settings["accept_rounds_containing_failures"],
-                initial_parameters=self.get_attribute("initial_global_model_parameters"),
+                initial_parameters=self.get_attribute(
+                    "initial_global_model_parameters"
+                ),
                 fit_metrics_aggregation_fn=self.fit_metrics_aggregation_fn,
                 evaluate_metrics_aggregation_fn=self.evaluate_metrics_aggregation_fn,
                 server_learning_rate=fed_avg_m_settings["server_learning_rate"],
@@ -1139,7 +1201,7 @@ def main() -> None:
     df.add_transformation(tf9)
 
     tf10 = Transformation("EvaluationConfig")
-    tf10_output = Set(
+    tf10_input = Set(
         "iEvaluationConfig",
         SetType.INPUT,
         [
@@ -1296,7 +1358,9 @@ def main() -> None:
     ##########
     # Parse Flower Server Arguments.
     ag = ArgumentParser(description="Flower Server Arguments")
-    ag.add_argument("--server_id", type=int, required=True, help="Server ID (no default)")
+    ag.add_argument(
+        "--server_id", type=int, required=True, help="Server ID (no default)"
+    )
     ag.add_argument(
         "--server_config_file",
         type=Path,
