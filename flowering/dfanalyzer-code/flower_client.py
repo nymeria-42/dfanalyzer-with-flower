@@ -88,7 +88,7 @@ class Client(NumPyClient):
         t8 = Task(8 + 6 * (fit_config["fl_round"] - 1), dataflow_tag, "ClientTraining")
         t8.add_dependency(
             Dependency(
-                 [
+                [
                     "datasetload",
                     "modelconfig",
                     "optimizerconfig",
@@ -166,7 +166,7 @@ class Client(NumPyClient):
             training_metrics.get("val_sparse_categorical_accuracy", None),
             str(self.get_parameters(fit_config))[:10000],
             starting_time,
-            time.ctime()
+            time.ctime(),
         ]
 
         t8_output = DataSet("oClientTraining", [Element(to_dfanalyzer)])
@@ -207,9 +207,9 @@ class Client(NumPyClient):
                 "EvaluationConfig",
             ),
         )
-        
+
         starting_time = time.ctime()
-        
+
         t11.begin()
 
         # Start the Evaluate Model Timser.
@@ -526,11 +526,7 @@ class FlowerClient:
         cp.read(filenames=client_config_file, encoding="utf-8")
         ml_model_settings = self.get_attribute("ml_model_settings")
         ml_model = None
-        t4 = Task(
-            4,
-            dataflow_tag,
-            "ModelConfig"
-        )
+        t4 = Task(4, dataflow_tag, "ModelConfig")
         t4.begin()
         attributes = [
             "model",
@@ -602,11 +598,7 @@ class FlowerClient:
         cp.read(filenames=client_config_file, encoding="utf-8")
         ml_model_settings = self.get_attribute("ml_model_settings")
         ml_model_optimizer = None
-        t5 = Task(
-            5,
-            dataflow_tag,
-            "OptimizerConfig"
-        )
+        t5 = Task(5, dataflow_tag, "OptimizerConfig")
         t5.begin()
         if ml_model_settings["optimizer"] == "SGD":
             # Parse 'SGD Settings'.
@@ -638,11 +630,7 @@ class FlowerClient:
         cp.read(filenames=client_config_file, encoding="utf-8")
         ml_model_settings = self.get_attribute("ml_model_settings")
         ml_model_loss_function = None
-        t6 = Task(
-            6,
-            dataflow_tag,
-            "LossConfig"
-        )
+        t6 = Task(6, dataflow_tag, "LossConfig")
         t6.begin()
         if ml_model_settings["loss_function"] == "SparseCategoricalCrossentropy":
             # Parse 'SparseCategoricalCrossentropy Settings'.

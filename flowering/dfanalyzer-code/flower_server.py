@@ -550,6 +550,8 @@ class FlowerServer:
     def on_fit_config_fn(self, fl_round: int) -> Optional[dict]:
         """Training configuration function called by Flower before each training round."""
         # Update the Current FL Round (Necessary Workaround on Flower v1.1.0).
+        starting_time = time.ctime()
+
         self.set_attribute("fl_round", fl_round)
         # Log the Current FL Round (If Logger is Enabled for "INFO" Level).
         message = "[Server {0}] Current FL Round: {1}".format(
@@ -597,7 +599,6 @@ class FlowerServer:
                 )
             )
 
-        starting_time = time.ctime()
 
         t7.begin()
 
@@ -613,14 +614,16 @@ class FlowerServer:
 
         to_dfanalyzer = [
             fl_round,
-            dynamically_adjusted,
             starting_time,
             time.ctime(),
         ] + [fit_config.get(attr, 0) for attr in attributes]
 
         t7_input = DataSet("iTrainingConfig", [Element(to_dfanalyzer)])
         t7.add_dataset(t7_input)
-        t7_output = DataSet("oTrainingConfig", [Element([])])
+        t7_output = DataSet(
+            "oTrainingConfig",
+            [Element([fl_round, dynamically_adjusted])],
+        )
         t7.add_dataset(t7_output)
         t7.end()
 
@@ -1099,7 +1102,6 @@ def main() -> None:
         SetType.INPUT,
         [
             Attribute("server_round", AttributeType.NUMERIC),
-            Attribute("dynamically_adjusted", AttributeType.TEXT),
             Attribute("starting_time", AttributeType.TEXT),
             Attribute("ending_time", AttributeType.TEXT),
             Attribute("shuffle", AttributeType.TEXT),
@@ -1115,7 +1117,10 @@ def main() -> None:
     tf7_output = Set(
         "oTrainingConfig",
         SetType.OUTPUT,
-        [],
+        [
+            Attribute("server_round", AttributeType.NUMERIC),
+            Attribute("dynamically_adjusted", AttributeType.TEXT),
+        ],
     )
 
     tf1_output.set_type(SetType.INPUT)
@@ -1323,7 +1328,7 @@ def main() -> None:
             BEGIN
                 RETURN
                 SELECT 
-                    CASE WHEN (SELECT DISTINCT dynamically_adjusted FROM itrainingconfig
+                    CASE WHEN (SELECT DISTINCT dynamically_adjusted FROM otrainingconfig
                     WHERE server_round BETWEEN fl_round - 2 AND fl_round - 1 AND dynamically_adjusted = 'True') IS NOT NULL THEN 0 
                         ELSE (
                     SELECT
