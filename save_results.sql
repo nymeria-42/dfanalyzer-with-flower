@@ -1,5 +1,6 @@
 COPY (
     SELECT
+        st.server_round,
         st.total_num_clients,
         st.total_num_examples,
         st.accuracy,
