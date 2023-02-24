@@ -1253,7 +1253,7 @@ def main() -> None:
             )
 
             cursor.execute(
-                """CREATE FUNCTION update_hyperparameters (threshold double,
+                """CREATE FUNCTION update_hyperparameters (accuracy_goal double,
             limit_training_time double,
             limit_accuracy_change double,
             fl_round int)
@@ -1267,8 +1267,8 @@ def main() -> None:
                     SELECT
                     DISTINCT
                         CASE
-                            WHEN last_value(accuracy_evaluation) OVER () < threshold
-                            AND (last_value(training_time) OVER () / first_value(training_time) OVER () > limit_training_time
+                            WHEN last_value(accuracy_evaluation) OVER () < accuracy_goal
+                            AND (last_value(training_time) OVER () > limit_training_time*60
                             OR last_value(accuracy_training) OVER () - first_value(accuracy_training) OVER () < limit_accuracy_change
                             OR last_value(accuracy_evaluation) OVER () - first_value(accuracy_evaluation) OVER () < limit_accuracy_change
                             OR ( first_value(accuracy_training) OVER () <  last_value(accuracy_training) OVER ()
