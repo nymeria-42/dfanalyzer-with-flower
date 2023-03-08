@@ -1330,24 +1330,23 @@ def main() -> None:
                 RETURN
                 SELECT 
                     CASE WHEN (SELECT DISTINCT dynamically_adjusted FROM otrainingconfig
-                    WHERE server_round BETWEEN fl_round - 2 AND fl_round - 1 AND dynamically_adjusted = 'True') IS NOT NULL THEN 0 
-                        ELSE (
-                    SELECT
+                        WHERE server_round BETWEEN fl_round - 2 AND fl_round - 1 AND dynamically_adjusted = 'True') IS NOT NULL THEN 0
+                        WHEN (SELECT DISTINCT
                         CASE
-                            WHEN last_value(accuracy_training) OVER () < accuracy_goal
+                            WHEN (last_value(accuracy_training) OVER () < accuracy_goal
                             AND last_value(training_time) OVER () < limit_training_time*60 
-                            AND (first_value(accuracy_training) OVER () < last_value(accuracy_training) OVER ()
-                            AND first_value(val_accuracy) OVER () < last_value(val_accuracy) OVER ())
-                            AND last_value(accuracy_training) OVER () - first_value(accuracy_training) OVER () > limit_accuracy_change
+                            AND (last_value(accuracy_training) OVER () > first_value(accuracy_training) OVER ()
+                            AND last_value(val_accuracy) OVER () > first_value(val_accuracy) OVER ())
+                            AND last_value(accuracy_training) OVER () - first_value(accuracy_training) OVER () < limit_accuracy_change)
                             THEN 1
-                            ELSE 0
                         END
-                    FROM
-                        (
-                        SELECT * FROM check_metrics(fl_round - 2)
-                        UNION 
-                        SELECT * FROM check_metrics(fl_round - 1)) AS t1))
-                    END;
+                        FROM
+                            (
+                            SELECT * FROM check_metrics(fl_round - 2)
+                            UNION 
+                            SELECT * FROM check_metrics(fl_round - 1)) AS t1) IS NOT NULL THEN 1
+                    ELSE 0
+                END;
             END;"""
             )
 
