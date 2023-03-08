@@ -504,8 +504,10 @@ class FlowerServer:
                 adjusted_value = old_value * factor
             elif operation_text == "Divide by":
                 adjusted_value = old_value / factor
-                if type(old_value) == int and type(factor) == int:
-                    adjusted_value = int(adjusted_value)
+
+            if type(old_value) == int:
+                adjusted_value = int(adjusted_value)
+
         return adjusted_value
 
     def dynamically_adjust_hyper_parameters(self, phase: str, config: dict) -> dict:
@@ -598,7 +600,6 @@ class FlowerServer:
                     ["1", "2", str(12 + 6 * (fl_round - 2))],
                 )
             )
-
 
         t7.begin()
 
@@ -1332,14 +1333,12 @@ def main() -> None:
                     WHERE server_round BETWEEN fl_round - 2 AND fl_round - 1 AND dynamically_adjusted = 'True') IS NOT NULL THEN 0 
                         ELSE (
                     SELECT
-                    DISTINCT
                         CASE
-                            WHEN last_value(accuracy_evaluation) OVER () < accuracy_goal
-                            AND (last_value(training_time) OVER () > limit_training_time*60
-                            OR last_value(accuracy_training) OVER () - first_value(accuracy_training) OVER () < limit_accuracy_change
-                            OR last_value(accuracy_evaluation) OVER () - first_value(accuracy_evaluation) OVER () < limit_accuracy_change
-                            OR ( first_value(accuracy_training) OVER () <  last_value(accuracy_training) OVER ()
-                            AND first_value(val_accuracy) OVER () > last_value(val_accuracy) OVER ())) 
+                            WHEN last_value(accuracy_training) OVER () < accuracy_goal
+                            AND last_value(training_time) OVER () < limit_training_time*60 
+                            AND (first_value(accuracy_training) OVER () < last_value(accuracy_training) OVER ()
+                            AND first_value(val_accuracy) OVER () < last_value(val_accuracy) OVER ())
+                            AND last_value(accuracy_training) OVER () - first_value(accuracy_training) OVER () > limit_accuracy_change
                             THEN 1
                             ELSE 0
                         END
@@ -1347,7 +1346,7 @@ def main() -> None:
                         (
                         SELECT * FROM check_metrics(fl_round - 2)
                         UNION 
-                        SELECT * FROM check_metrics(fl_round - 1)) AS t1)
+                        SELECT * FROM check_metrics(fl_round - 1)) AS t1))
                     END;
             END;"""
             )
