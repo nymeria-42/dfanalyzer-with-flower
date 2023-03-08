@@ -26,10 +26,7 @@ RUN touch /etc/apt/sources.list.d/monetdb.list \
     && apt-get update && apt-get install -y monetdb5-sql monetdb-client
 
 # Get DfAnalyzer repository
-RUN git clone https://gitlab.com/ssvitor/dataflow_analyzer.git && rm dataflow_analyzer/applications/dfanalyzer/dfa/backup/data-local.zip
-
-# Install FastBit (takes a while and it's not necessary if you don't use RawDataIndexer)
-# RUN git clone https://github.com/berkeleysdm/fastbit/ && cd fastbit && ./configure && make
+# RUN git clone https://gitlab.com/ssvitor/dataflow_analyzer.git && rm dataflow_analyzer/applications/dfanalyzer/dfa/backup/data-local.zip
 
 # Configure environment variables
 ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64
@@ -41,16 +38,17 @@ ENV PATH ${M2_HOME}/bin:${PATH}
 # Install application's requirements
 RUN pip install flwr tensorflow
 
-WORKDIR /dataflow_analyzer
+# WORKDIR /dataflow_analyzer
 
 # Copy files that provides fixes to usage of DfAnalyzer with the latest version of MonetDB and bigger upperbound limit to attribute text
-
-COPY DfAnalyzer/data-local.zip DfAnalyzer/data-local.zip
-COPY DfAnalyzer/pom.xml DfAnalyzer/pom.xml
-COPY DfAnalyzer/DbConnection.java DfAnalyzer/src/main/java/rest/config/DbConnection.java
-COPY DfAnalyzer/DataflowProvenance.java DfAnalyzer/src/main/java/di/provenance/DataflowProvenance.java
-COPY DfAnalyzer/WebConf.java DfAnalyzer/src/main/java/rest/server/WebConf.java
-COPY DfAnalyzer/TaskProvenance.java DfAnalyzer/src/main/java/di/provenance/TaskProvenance.java
+COPY DfAnalyzer/ DfAnalyzer/
+# COPY DfAnalyzer/data-local.zip DfAnalyzer/data-local.zip
+# COPY DfAnalyzer/pom.xml DfAnalyzer/pom.xml
+# COPY DfAnalyzer/DbConnection.java DfAnalyzer/src/main/java/rest/config/DbConnection.java
+# COPY DfAnalyzer/DataflowProvenance.java DfAnalyzer/src/main/java/di/provenance/DataflowProvenance.java
+# COPY DfAnalyzer/TaskProvenance.java DfAnalyzer/src/main/java/di/provenance/TaskProvenance.java
+# COPY DfAnalyzer/WebConf.java DfAnalyzer/src/main/java/rest/server/WebConf.java
+# COPY DfAnalyzer/start-dfanalyzer.sh DfAnalyzer/start-dfanalyzer.sh
 
 # Prepare DfAnalyzer to be executed
 RUN mvn -f DfAnalyzer/pom.xml clean package
@@ -58,6 +56,7 @@ RUN mvn -f DfAnalyzer/pom.xml clean package
 # && mvn -f RawDataExtractor/pom.xml clean package \
 # && mvn -f RawDataIndexer/pom.xml clean package \
 
+RUN cd /DfAnalyzer/dfa-lib-python && make install
 RUN cd library/dfa-lib-python && make install
 
 # Specify volumes to applications on container-side
@@ -67,5 +66,4 @@ RUN pip install -r requirements.txt
 # Specify port to expose on container-side
 EXPOSE 22000 50000 8080
 
-COPY DfAnalyzer/start-dfanalyzer.sh DfAnalyzer/start-dfanalyzer.sh
 CMD ["/bin/bash"]
