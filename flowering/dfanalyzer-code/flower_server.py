@@ -1339,12 +1339,13 @@ def main() -> None:
                             AND last_value(val_accuracy) OVER () > first_value(val_accuracy) OVER ())
                             AND last_value(accuracy_training) OVER () - first_value(accuracy_training) OVER () < limit_accuracy_change)
                             THEN 1
+                            ELSE 0
                         END
                         FROM
                             (
                             SELECT * FROM check_metrics(fl_round - 2)
                             UNION 
-                            SELECT * FROM check_metrics(fl_round - 1)) AS t1) IS NOT NULL THEN 1
+                            SELECT * FROM check_metrics(fl_round - 1)) AS t1) THEN 1
                     ELSE 0
                 END;
             END;"""
