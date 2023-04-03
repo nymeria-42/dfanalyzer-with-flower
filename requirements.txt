@@ -1,0 +1,4 @@
+pymonetdb
+pymongo
+pillow
+pandas
