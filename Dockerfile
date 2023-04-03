@@ -57,10 +57,9 @@ RUN mvn -f DfAnalyzer/pom.xml clean package
 # && mvn -f RawDataIndexer/pom.xml clean package \
 
 RUN cd /DfAnalyzer/dfa-lib-python && make install
-RUN cd library/dfa-lib-python && make install
 
 # Specify volumes to applications on container-side
-VOLUME ["/dataflow_analyzer/applications/flowering"]
+VOLUME ["/applications/flowering"]
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 # Specify port to expose on container-side
