@@ -1,0 +1,15 @@
+version: "3.8"
+services:
+  mongodb:
+    image : mongo
+    container_name: mongodb
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - MONGO_INITDB_USERNAME=camila.lopes
+      - MONGO_INITDB_PASSWORD=teste123
+    volumes:
+      - ./data-mongo:/data/db
+    ports:
+      - 27017:27017
+    restart: unless-stopped

@@ -35,6 +35,11 @@ from dfa_lib_python.task_status import TaskStatus
 from dfa_lib_python.extractor_extension import ExtractorExtension
 import time
 
+from pymongo import MongoClient
+import pymongo
+from bson.binary import Binary
+import pickle
+
 dataflow_tag = "flower-df"
 
 
@@ -78,6 +83,10 @@ class Client(NumPyClient):
     def get_parameters(self, config: dict) -> NDArrays:
         # Return the Local Model's Current Parameters (Weights).
         return self.model.get_weights()
+
+    def get_connection_mongodb(self, host, port):
+        client = MongoClient(host=host, port=port)
+        return client.flowerprov
 
     def fit(
         self, global_model_current_parameters: NDArrays, fit_config: dict
@@ -168,6 +177,16 @@ class Client(NumPyClient):
             starting_time,
             time.ctime(),
         ]
+
+        checkpoints = {
+            "round": fit_config["fl_round"],
+            "client": self.client_id,
+            "local_weights": Binary(
+                pickle.dumps(global_model_current_parameters, protocol=2)
+            ),
+        }
+        db = self.get_connection_mongodb("localhost", 27017)
+        db.checkpoints.insert_one(checkpoints)
 
         t8_output = DataSet("oClientTraining", [Element(to_dfanalyzer)])
         t8.add_dataset(t8_output)

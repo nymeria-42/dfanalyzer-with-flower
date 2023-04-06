@@ -24,7 +24,11 @@ from dfa_lib_python.task_status import TaskStatus
 from dfa_lib_python.extractor_extension import ExtractorExtension
 from dfa_lib_python.dependency import Dependency
 import time
+
 import pymonetdb
+from pymongo import MongoClient
+from bson.binary import Binary
+import pickle
 
 
 dataflow_tag = "flower-df"
@@ -549,6 +553,10 @@ class FlowerServer:
             self.log_message(message, "INFO")
         return config
 
+    def get_connection_mongodb(self, host, port):
+        client = MongoClient(host=host, port=port)
+        return client.flowerprov
+
     def on_fit_config_fn(self, fl_round: int) -> Optional[dict]:
         """Training configuration function called by Flower before each training round."""
         # Update the Current FL Round (Necessary Workaround on Flower v1.1.0).
@@ -627,6 +635,15 @@ class FlowerServer:
         )
         t7.add_dataset(t7_output)
         t7.end()
+
+        checkpoints = {
+            "round": fit_config["fl_round"],
+            "server": self.get_attribute("server_id"),
+            "weights": Binary(pickle.dumps(self.global_model_parameters, protocol=2)),
+        }
+
+        db = self.get_connection_mongodb("localhost", 27017)
+        db.checkpoints.insert_one(checkpoints)
 
         # Return the Training Configuration to be Sent to All Participating Clients.
         return fit_config
