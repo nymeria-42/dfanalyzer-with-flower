@@ -36,7 +36,6 @@ from dfa_lib_python.extractor_extension import ExtractorExtension
 import time
 
 from pymongo import MongoClient
-import pymongo
 from bson.binary import Binary
 import pickle
 
@@ -164,7 +163,7 @@ class Client(NumPyClient):
         # Add the Fit Time to the Training Metrics.
         training_metrics.update({"fit_time": fit_time_end})
 
-        checkpoints = {
+        local_weights = {
             "round": fit_config["fl_round"],
             "client": self.client_id,
             "local_weights": Binary(
@@ -172,7 +171,7 @@ class Client(NumPyClient):
             ),
         }
         db = self.get_connection_mongodb("localhost", 27017)
-        _id = db.checkpoints.insert_one(checkpoints)
+        _id = db.local_weights.insert_one(local_weights)
 
         to_dfanalyzer = [
             self.client_id,

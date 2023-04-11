@@ -364,8 +364,8 @@ class FlowerServer:
     def instantiate_simple_client_manager() -> SimpleClientManager:
         return SimpleClientManager()
 
-    @staticmethod
-    def evaluate_fn(
+    # @staticmethod
+    def evaluate_fn(self, 
         fl_round: int, global_model_parameters: NDArrays, evaluate_config: dict
     ) -> Optional[Metrics]:
         """Server-side (Centralized) evaluation function called by Flower after every training round.
@@ -373,6 +373,12 @@ class FlowerServer:
         \nThe 'losses_centralized' and 'metrics_centralized' will only contain values using this centralized evaluation.
         \nAlternative: Client-side (Federated) evaluation."""
         # TODO: To Implement (If Ever Needed)...
+
+        self.set_attribute(
+                "global_model_parameters",
+                global_model_parameters,
+            )    
+
         return None
 
     def is_enabled_hyper_parameters_dynamic_adjustment(self, phase: str) -> bool:
@@ -756,7 +762,7 @@ class FlowerServer:
         checkpoints = {
             "round": self.get_attribute("fl_round"),
             "server": self.get_attribute("server_id"),
-            "weights": Binary(pickle.dumps(self.global_model_parameters, protocol=2)),
+            "global_weights": Binary(pickle.dumps(self.global_model_parameters, protocol=4)),
         }
 
         db = self.get_connection_mongodb("localhost", 27017)
