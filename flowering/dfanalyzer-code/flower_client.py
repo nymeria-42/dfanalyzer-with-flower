@@ -163,30 +163,30 @@ class Client(NumPyClient):
                     ][-1]
         # Add the Fit Time to the Training Metrics.
         training_metrics.update({"fit_time": fit_time_end})
-        to_dfanalyzer = [
-            self.client_id,
-            fit_config["fl_round"],
-            fit_time_end,
-            len(self.x_train),
-            str(global_model_current_parameters)[:10000],
-            training_metrics["sparse_categorical_accuracy"],
-            training_metrics["loss"],
-            training_metrics.get("val_loss", None),
-            training_metrics.get("val_sparse_categorical_accuracy", None),
-            str(self.get_parameters(fit_config))[:10000],
-            starting_time,
-            time.ctime(),
-        ]
 
         checkpoints = {
             "round": fit_config["fl_round"],
             "client": self.client_id,
             "local_weights": Binary(
-                pickle.dumps(global_model_current_parameters, protocol=2)
+                pickle.dumps(weight_tensors_list, protocol=2)
             ),
         }
         db = self.get_connection_mongodb("localhost", 27017)
-        db.checkpoints.insert_one(checkpoints)
+        _id = db.checkpoints.insert_one(checkpoints)
+
+        to_dfanalyzer = [
+            self.client_id,
+            fit_config["fl_round"],
+            fit_time_end,
+            len(self.x_train),
+            training_metrics["sparse_categorical_accuracy"],
+            training_metrics["loss"],
+            training_metrics.get("val_loss", None),
+            training_metrics.get("val_sparse_categorical_accuracy", None),
+            _id.inserted_id,
+            starting_time,
+            time.ctime(),
+        ]
 
         t8_output = DataSet("oClientTraining", [Element(to_dfanalyzer)])
         t8.add_dataset(t8_output)

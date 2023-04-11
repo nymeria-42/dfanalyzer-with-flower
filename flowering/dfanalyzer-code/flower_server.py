@@ -622,12 +622,14 @@ class FlowerServer:
         ]
 
         to_dfanalyzer = [
+            self.get_attribute("server_id"),
             fl_round,
             starting_time,
             time.ctime(),
         ] + [fit_config.get(attr, 0) for attr in attributes]
 
         t7_input = DataSet("iTrainingConfig", [Element(to_dfanalyzer)])
+
         t7.add_dataset(t7_input)
         t7_output = DataSet(
             "oTrainingConfig",
@@ -635,15 +637,6 @@ class FlowerServer:
         )
         t7.add_dataset(t7_output)
         t7.end()
-
-        checkpoints = {
-            "round": fit_config["fl_round"],
-            "server": self.get_attribute("server_id"),
-            "weights": Binary(pickle.dumps(self.global_model_parameters, protocol=2)),
-        }
-
-        db = self.get_connection_mongodb("localhost", 27017)
-        db.checkpoints.insert_one(checkpoints)
 
         # Return the Training Configuration to be Sent to All Participating Clients.
         return fit_config
@@ -760,7 +753,17 @@ class FlowerServer:
         )
         self.log_message(message, "INFO")
 
+        checkpoints = {
+            "round": self.get_attribute("fl_round"),
+            "server": self.get_attribute("server_id"),
+            "weights": Binary(pickle.dumps(self.global_model_parameters, protocol=2)),
+        }
+
+        db = self.get_connection_mongodb("localhost", 27017)
+        _id = db.checkpoints.insert_one(checkpoints)
+
         to_dfanalyzer = [
+            self.get_attribute("server_id"),
             self.get_attribute("fl_round"),
             total_num_clients,
             total_num_examples,
@@ -768,6 +771,7 @@ class FlowerServer:
             aggregated_metrics["loss"],
             aggregated_metrics["val_sparse_categorical_accuracy"],
             aggregated_metrics["val_loss"],
+            _id.inserted_id,
             aggregated_metrics["fit_time"],
             starting_time,
             time.ctime(),
@@ -835,6 +839,7 @@ class FlowerServer:
         self.log_message(message, "INFO")
 
         to_dfanalyzer = [
+            self.get_attribute("server_id"),
             self.get_attribute("fl_round"),
             total_num_clients,
             total_num_examples,
@@ -1119,6 +1124,7 @@ def main() -> None:
         "iTrainingConfig",
         SetType.INPUT,
         [
+            Attribute("server_id", AttributeType.NUMERIC),
             Attribute("server_round", AttributeType.NUMERIC),
             Attribute("starting_time", AttributeType.TEXT),
             Attribute("ending_time", AttributeType.TEXT),
@@ -1161,7 +1167,6 @@ def main() -> None:
             Attribute("server_round", AttributeType.NUMERIC),
             Attribute("training_time", AttributeType.NUMERIC),
             Attribute("size_x_train", AttributeType.NUMERIC),
-            Attribute("global_current_parameters", AttributeType.TEXT),
             Attribute("accuracy", AttributeType.NUMERIC),
             Attribute("loss", AttributeType.NUMERIC),
             Attribute("val_loss", AttributeType.NUMERIC),
@@ -1204,6 +1209,7 @@ def main() -> None:
         "oServerTrainingAggregation",
         SetType.OUTPUT,
         [
+            Attribute("server_id", AttributeType.NUMERIC),
             Attribute("server_round", AttributeType.NUMERIC),
             Attribute("total_num_clients", AttributeType.NUMERIC),
             Attribute("total_num_examples", AttributeType.NUMERIC),
@@ -1211,6 +1217,7 @@ def main() -> None:
             Attribute("loss", AttributeType.NUMERIC),
             Attribute("val_accuracy", AttributeType.NUMERIC),
             Attribute("val_loss", AttributeType.NUMERIC),
+            Attribute("weights_mongo_id", AttributeType.TEXT),
             Attribute("training_time", AttributeType.NUMERIC),
             Attribute("starting_time", AttributeType.TEXT),
             Attribute("ending_time", AttributeType.TEXT),
@@ -1274,6 +1281,7 @@ def main() -> None:
         "oServerEvaluationAggregation",
         SetType.OUTPUT,
         [
+            Attribute("server_id", AttributeType.NUMERIC),
             Attribute("server_round", AttributeType.NUMERIC),
             Attribute("total_num_clients", AttributeType.NUMERIC),
             Attribute("total_num_examples", AttributeType.NUMERIC),
@@ -1367,6 +1375,46 @@ def main() -> None:
                 END;
             END;"""
             )
+
+            cursor.execute(
+                """
+            CREATE OR REPLACE FUNCTION check_last_round_fl (server_id int)
+            RETURNS int
+            BEGIN
+                RETURN
+                SELECT
+                    MAX(server_round)
+                FROM
+                    oservertrainingaggregation as st
+                WHERE st.server_id = server_id;
+            END;"""
+            )
+
+            cursor.execute(
+                """
+            CREATE OR REPLACE FUNCTION get_num_rounds (server_id int)
+            RETURNS int
+            BEGIN
+                RETURN
+                SELECT
+                    num_rounds
+                FROM 
+                    iServerConfig as sc
+                WHERE sc.server_id = server_id;
+            END;"""
+            )
+
+            cursor.execute(
+                """
+            CREATE OR REPLACE FUNCTION check_ending_fl (server_id int)
+            RETURNS bool
+            BEGIN
+                RETURN
+                SELECT
+                    check_last_round_fl(0) = get_num_rounds(0);
+            END;"""
+            )
+
 
             conn.commit()
             cursor.close()
