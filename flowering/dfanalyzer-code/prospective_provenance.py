@@ -148,8 +148,8 @@ tf7_input = Set(
     "iTrainingConfig",
     SetType.INPUT,
     [
+        Attribute("server_id", AttributeType.NUMERIC),
         Attribute("server_round", AttributeType.NUMERIC),
-        Attribute("dynamically_adjusted", AttributeType.TEXT),
         Attribute("starting_time", AttributeType.TEXT),
         Attribute("ending_time", AttributeType.TEXT),
         Attribute("shuffle", AttributeType.TEXT),
@@ -165,7 +165,10 @@ tf7_input = Set(
 tf7_output = Set(
     "oTrainingConfig",
     SetType.OUTPUT,
-    [],
+    [
+        Attribute("server_round", AttributeType.NUMERIC),
+        Attribute("dynamically_adjusted", AttributeType.TEXT),
+    ],
 )
 
 tf1_output.set_type(SetType.INPUT)
@@ -188,7 +191,6 @@ tf8_output = Set(
         Attribute("server_round", AttributeType.NUMERIC),
         Attribute("training_time", AttributeType.NUMERIC),
         Attribute("size_x_train", AttributeType.NUMERIC),
-        Attribute("global_current_parameters", AttributeType.TEXT),
         Attribute("accuracy", AttributeType.NUMERIC),
         Attribute("loss", AttributeType.NUMERIC),
         Attribute("val_loss", AttributeType.NUMERIC),
@@ -231,6 +233,7 @@ tf9_output = Set(
     "oServerTrainingAggregation",
     SetType.OUTPUT,
     [
+        Attribute("server_id", AttributeType.NUMERIC),
         Attribute("server_round", AttributeType.NUMERIC),
         Attribute("total_num_clients", AttributeType.NUMERIC),
         Attribute("total_num_examples", AttributeType.NUMERIC),
@@ -238,6 +241,7 @@ tf9_output = Set(
         Attribute("loss", AttributeType.NUMERIC),
         Attribute("val_accuracy", AttributeType.NUMERIC),
         Attribute("val_loss", AttributeType.NUMERIC),
+        Attribute("weights_mongo_id", AttributeType.TEXT),
         Attribute("training_time", AttributeType.NUMERIC),
         Attribute("starting_time", AttributeType.TEXT),
         Attribute("ending_time", AttributeType.TEXT),
@@ -301,6 +305,7 @@ tf12_output = Set(
     "oServerEvaluationAggregation",
     SetType.OUTPUT,
     [
+        Attribute("server_id", AttributeType.NUMERIC),
         Attribute("server_round", AttributeType.NUMERIC),
         Attribute("total_num_clients", AttributeType.NUMERIC),
         Attribute("total_num_examples", AttributeType.NUMERIC),
@@ -341,7 +346,7 @@ while tries < 100:
         cursor.execute(
             """
         CREATE OR REPLACE FUNCTION check_metrics (fl_round int)
-        RETURNS table (training_time double, accuracy_training double, loss_training double,
+        RETURNS table (training_time double, accuracy_training double, loss_training double, 
             val_accuracy double, val_loss double, accuracy_evaluation double, loss_evaluation double)
         BEGIN
             RETURN
@@ -355,7 +360,7 @@ while tries < 100:
                 se.loss
             FROM
                 oservertrainingaggregation as st
-            JOIN
+            JOIN 
                 oserverevaluationaggregation as se
             ON
                 st.server_round = se.server_round
@@ -365,37 +370,75 @@ while tries < 100:
         )
 
         cursor.execute(
-            """CREATE FUNCTION update_hyperparameters (threshold double,
+            """CREATE OR REPLACE FUNCTION update_hyperparameters (accuracy_goal double,
         limit_training_time double,
         limit_accuracy_change double,
         fl_round int)
         RETURNS boolean
         BEGIN
             RETURN
-            SELECT
-                CASE WHEN (SELECT DISTINCT dynamically_adjusted FROM itrainingconfig
-                WHERE server_round BETWEEN fl_round - 2 AND fl_round - 1 AND dynamically_adjusted = 'True') IS NOT NULL THEN 0
-                    ELSE (
-                SELECT
-                DISTINCT
+            SELECT 
+                CASE WHEN (SELECT DISTINCT dynamically_adjusted FROM otrainingconfig
+                    WHERE server_round BETWEEN fl_round - 2 AND fl_round - 1 AND dynamically_adjusted = 'True') IS NOT NULL THEN 0
+                    WHEN (SELECT DISTINCT
                     CASE
-                        WHEN last_value(accuracy_evaluation) OVER () < threshold
-                        AND (last_value(training_time) OVER () / first_value(training_time) OVER () > limit_training_time
-                        OR last_value(accuracy_training) OVER () - first_value(accuracy_training) OVER () < limit_accuracy_change
-                        OR last_value(accuracy_evaluation) OVER () - first_value(accuracy_evaluation) OVER () < limit_accuracy_change
-                        OR ( first_value(accuracy_training) OVER () <  last_value(accuracy_training) OVER ()
-                        AND first_value(val_accuracy) OVER () > last_value(val_accuracy) OVER ()))
+                        WHEN (last_value(accuracy_training) OVER () < accuracy_goal
+                        AND last_value(training_time) OVER () < limit_training_time*60 
+                        AND (last_value(accuracy_training) OVER () > first_value(accuracy_training) OVER ()
+                        AND last_value(val_accuracy) OVER () > first_value(val_accuracy) OVER ())
+                        AND last_value(accuracy_training) OVER () - first_value(accuracy_training) OVER () < limit_accuracy_change)
                         THEN 1
                         ELSE 0
                     END
-                FROM
-                    (
-                    SELECT * FROM check_metrics(fl_round - 2)
-                    UNION
-                    SELECT * FROM check_metrics(fl_round - 1)) AS t1)
-                END;
+                    FROM
+                        (
+                        SELECT * FROM check_metrics(fl_round - 2)
+                        UNION 
+                        SELECT * FROM check_metrics(fl_round - 1)) AS t1) THEN 1
+                ELSE 0
+            END;
         END;"""
         )
+
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION check_last_round_fl (server_id int)
+        RETURNS int
+        BEGIN
+            RETURN
+            SELECT
+                MAX(server_round)
+            FROM
+                oservertrainingaggregation as st
+            WHERE st.server_id = server_id;
+        END;"""
+        )
+
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION get_num_rounds (server_id int)
+        RETURNS int
+        BEGIN
+            RETURN
+            SELECT
+                MIN(num_rounds)
+            FROM 
+                iServerConfig as sc
+            WHERE sc.server_id = server_id;
+        END;"""
+        )
+
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION check_ending_fl (server_id int)
+        RETURNS bool
+        BEGIN
+            RETURN
+            SELECT
+                check_last_round_fl(server_id) = get_num_rounds(server_id);
+        END;"""
+        )
+
 
         conn.commit()
         cursor.close()
