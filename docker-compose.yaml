@@ -14,13 +14,31 @@ services:
       - ./dataset-splitter/dataset_partitions:/dataset_partitions
     working_dir: "/DfAnalyzer"
     entrypoint: [ "sh", "start-dfanalyzer.sh" ]
-    healthcheck:
-      test:  ["CMD", "curl", "-f", "http://localhost:22000"]
-      interval: 10s
-      timeout: 20s
-      retries: 5
-      start_period: 10s
+    # healthcheck:
+    #   test:  ["CMD", "curl", "-f", "http://localhost:22000"]
+    #   interval: 10s
+    #   timeout: 20s
+    #   retries: 5
+    #   start_period: 10s
 
+  prospective-provenance:
+      image: dfanalyzer
+      container_name: provenance 
+      restart: "no"
+      network_mode: "host"
+      environment:
+        - DFA_URL=http://localhost:22000
+      # ports: 
+      #  - 8080:8080
+      volumes:
+        - ./flowering:/applications/flowering
+      working_dir: "/applications/flowering/"
+      command: bash -c " python3 dfanalyzer-code/prospective_provenance.py"
+      # depends_on:
+      #   dfanalyzer:
+      #     condition: service_healthy
+      #   mongodb:
+      #     condition: service_healthy
 
   server:
     image: dfanalyzer
@@ -34,18 +52,13 @@ services:
     volumes:
       - ./flowering:/applications/flowering
     working_dir: "/applications/flowering/"
-    command: bash -c "python3 dfanalyzer-code/prospective_provenance.py && bash script/start_flower_server.sh config/flower_server.cfg"
-    depends_on:
-      dfanalyzer:
-        condition: service_healthy
-      mongodb:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl","--http0.9", "http://localhost:8080"]
-      interval: 10s
-      timeout: 20s
-      retries: 5
-      start_period: 10s
+    command: bash -c " bash script/start_flower_server.sh config/flower_server.cfg"
+    # healthcheck:
+    #   test: ["CMD", "curl","--http0.9", "http://localhost:8080"]
+    #   interval: 10s
+    #   timeout: 20s
+    #   retries: 5
+    #   start_period: 10s
 
   mongodb:
     image : mongo
@@ -60,12 +73,12 @@ services:
     #   - ./data-mongo:/data/db
     ports:
       - 27017:27017
-    healthcheck:
-      test: echo 'db.runCommand({serverStatus:1}).ok' | mongosh --quiet | grep 1
-      interval: 10s
-      timeout: 20s
-      retries: 5
-      start_period: 10s
+    # healthcheck:
+    #   test: echo 'db.runCommand({serverStatus:1}).ok' | mongosh --quiet | grep 1
+    #   interval: 10s
+    #   timeout: 20s
+    #   retries: 5
+    #   start_period: 10s
 
   client1:
     image: dfanalyzer
@@ -84,9 +97,9 @@ services:
         "0",
         "config/flower_clients.cfg"
       ]
-    depends_on:
-      server: 
-        condition: service_healthy
+    # depends_on:
+    #   server: 
+    #     condition: service_healthy
 
   client2:
     image: dfanalyzer
@@ -105,9 +118,9 @@ services:
         "1",
         "config/flower_clients.cfg"
       ]
-    depends_on:
-      server: 
-        condition: service_healthy
+    # depends_on:
+    #   server: 
+    #     condition: service_healthy
 
   client3:
     image: dfanalyzer
@@ -126,9 +139,9 @@ services:
         "2",
         "config/flower_clients.cfg"
       ]
-    depends_on:
-      server: 
-        condition: service_healthy
+    # depends_on:
+    #   server: 
+    #     condition: service_healthy
 
   client4:
     image: dfanalyzer
@@ -147,9 +160,9 @@ services:
         "3",
         "config/flower_clients.cfg"
       ]
-    depends_on:
-      server: 
-        condition: service_healthy
+    # depends_on:
+    #   server: 
+    #     condition: service_healthy
 
   client5:
     image: dfanalyzer
@@ -168,6 +181,6 @@ services:
         "4",
         "config/flower_clients.cfg"
       ]
-    depends_on:
-      server: 
-        condition: service_healthy
+    # depends_on:
+    #   server: 
+    #     condition: service_healthy
