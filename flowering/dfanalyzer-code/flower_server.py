@@ -146,6 +146,52 @@ class FlowerServer:
         # Parse 'FL Settings' and Set Attributes.
         fl_settings = self.parse_config_section(cp, "FL Settings")
 
+        monetdb_settings = cp["MonetDB Settings"]
+        self.set_attribute("monetdb_settings", monetdb_settings)
+
+        conn = connect(
+            hostname=monetdb_settings["hostname"],
+            port=monetdb_settings["port"],
+            username=monetdb_settings["username"],
+            password=monetdb_settings["password"],
+            database=monetdb_settings["database"],
+        )
+    
+        cursor = conn.cursor()
+
+        cursor.execute(
+            f'SELECT check_max_server_id();'
+            )
+        
+        conn.commit()
+
+        max_server_id = cursor.fetchone()[0]
+
+        if max_server_id != None:
+            self.server_id = max_server_id + 1
+        else:
+            self.server_id = 0
+
+        cursor.execute(
+            f'SELECT check_ending_fl({self.server_id - 1});'
+            )
+        
+        conn.commit()
+        ending_fl = cursor.fetchone()[0]
+
+        if ending_fl == False:
+            cursor.execute(
+            f'SELECT check_last_round_fl({self.server_id - 1});'
+            )
+
+            conn.commit()
+            last_round = cursor.fetchone()[0]
+            
+            if last_round:
+                fl_settings["num_rounds"]  -= last_round
+        cursor.close()
+        conn.close()
+
         attributes = [
             "num_rounds",
             "round_timeout_in_seconds",
@@ -159,6 +205,7 @@ class FlowerServer:
             "min_evaluate_clients",
             "min_available_clients",
         ]
+
         to_dfanalyzer = [fl_settings.get(attr, None) for attr in attributes]
         t1 = Task(1, dataflow_tag, "ServerConfig")
 
@@ -253,19 +300,19 @@ class FlowerServer:
                     testing_hyper_parameters_dynamic_adjustment_settings,
                 )
             # If MonetDB is the Hyper-parameters Adjustments Eligibility Controller...
-            if (
-                hyper_parameters_dynamic_adjustment_settings[
-                    "adjustments_eligibility_controller"
-                ]
-                == "MonetDB"
-            ):
+            # if (
+            #     hyper_parameters_dynamic_adjustment_settings[
+            #         "adjustments_eligibility_controller"
+            #     ]
+            #     == "MonetDB"
+            # ):
 
-                ###########################
-                # -------- MODIFIED --------
-                # Parse 'MonetDB Settings' and Set Attributes.
-                monetdb_settings = cp["MonetDB Settings"]
-                self.set_attribute("monetdb_settings", monetdb_settings)
-                ###########################
+            #     ###########################
+            #     # -------- MODIFIED --------
+            #     # Parse 'MonetDB Settings' and Set Attributes.
+            #     monetdb_settings = cp["MonetDB Settings"]
+            #     self.set_attribute("monetdb_settings", monetdb_settings)
+            #     ###########################
 
         # Unbind ConfigParser Object (Garbage Collector).
         del cp
@@ -318,45 +365,43 @@ class FlowerServer:
         \n - To resume the training from a previously saved checkpoint;
         \n - To implement hybrid approaches, such as to fine-tune a pre-trained model using federated learning.
         \n If no parameters are returned, the server will randomly select one client and ask its parameters."""
+        monetdb_settings = self.get_attribute("monetdb_settings")
+        conn = connect(
+            hostname=monetdb_settings["hostname"],
+            port=monetdb_settings["port"],
+            username=monetdb_settings["username"],
+            password=monetdb_settings["password"],
+            database=monetdb_settings["database"],
+        )
 
-        conn = pymonetdb.connect(
-                username="monetdb",
-                password="monetdb",
-                hostname="localhost",
-                port="50000",
-                database="dataflow_analyzer",
-            )
-
-        cursor = conn.cursor()
-        cursor.execute(
-            f'SELECT check_ending_fl({self.server_id});'
-            )
-        conn.commit()
-        result = cursor.fetchone()
-
-        if result[0] == False:
-            self.server_id+=1
-
-            cursor.execute(
-            f'SELECT check_last_round_fl({self.server_id});'
-            )
-
-            conn.commit()
-            result = cursor.fetchone()
-
-            cursor.close()
-            conn.close()
-
-            db = self.get_connection_mongodb('localhost', 27017)
-            pesos = db.checkpoints.find_one({"round": {"$eq": result[0]}})
-    
-            params = pickle.loads(pesos["global_weights"])
+        if self.server_id != 0:
             
-            return ndarrays_to_parameters(params)  
+            cursor = conn.cursor()
+            cursor.execute(
+                f'SELECT check_ending_fl({self.server_id-1});'
+                )
+            conn.commit()
+            ending_fl = cursor.fetchone()[0]
 
+            if ending_fl[0] == False:
 
-        cursor.close()
-        conn.close()
+                cursor.execute(
+                f'SELECT check_last_round_fl({self.server_id-1});'
+                )
+
+                conn.commit()
+                last_round = cursor.fetchone()[0]
+
+                cursor.close()
+                conn.close()
+
+                db = self.get_connection_mongodb('localhost', 27017)
+                pesos = db.checkpoints.find_one({"round": {"$eq": last_round}})
+        
+                params = pickle.loads(pesos["global_weights"])
+                
+                return ndarrays_to_parameters(params)  
+
         return None
     
     
@@ -980,7 +1025,7 @@ class FlowerServer:
 
     def instantiate_flower_server_config(self) -> ServerConfig:
         fl_settings = self.get_attribute("fl_settings")
-        # Instantiate Flower Server's Config.
+        # Instantiate Flower Server's Config.   
         flower_server_config = ServerConfig(
             num_rounds=fl_settings["num_rounds"],
             round_timeout=fl_settings["round_timeout_in_seconds"],
