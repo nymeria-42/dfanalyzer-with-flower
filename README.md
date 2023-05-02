@@ -15,7 +15,7 @@ git clone git@github.com:alan-lira/dataset-splitter.git -b develop
 Para iniciar o DfAnalyzer:
 
 ```bash
-docker-compose up dfanalyzer
+docker compose up dfanalyzer
 ```
 
 - A pasta com as partições criada é usada como volume aqui para inserção no MonetDB
@@ -24,6 +24,18 @@ Para carregar dados do particionamento no MonetDB:
 
 ```bash
 cd dataset_partitions_monetdb && virtualenv venv && . venv/bin/activate && pip install -r requirements.txt && python import_monetdb.py
+```
+
+Para iniciar servidor do MongoDB:
+
+```bash
+docker compose up mongodb
+```
+
+Para rodar a proveniência prospectiva:
+
+```bash
+docker compose up prospective-provenance
 ```
 
 Para iniciar o servidor do flower:
@@ -35,7 +47,7 @@ docker compose up server
 Para iniciar um cliente:
 
 ```bash
-docker compose up client
+docker compose up client1
 ```
 
 Para iniciar 5 clientes com o dataset já particionado:
@@ -47,7 +59,7 @@ docker compose up client1 client2 client3 client4 client5
 É possível, então, consultar o banco MonetDB:
 
 ```bash
-mclient -u monetdb -d dataflow_analyzer -h localhost -p 50000
+docker exec -it dfanalyzer mclient -u monetdb -d dataflow_analyzer
 #password: monetdb
 ```
 
