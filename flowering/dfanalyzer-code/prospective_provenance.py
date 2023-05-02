@@ -439,6 +439,19 @@ while tries < 100:
         END;"""
         )
 
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION check_max_server_id ()
+        RETURNS int
+        BEGIN
+            RETURN
+            SELECT
+                MAX(server_id)
+            FROM 
+                iServerConfig as sc;
+        END;"""
+        )
+
 
         conn.commit()
         cursor.close()
