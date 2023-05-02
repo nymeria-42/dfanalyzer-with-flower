@@ -379,13 +379,11 @@ while tries < 100:
                 SELECT
                 DISTINCT
                     CASE
-                        WHEN last_value(accuracy_evaluation) OVER () < threshold
-                        AND (last_value(training_time) OVER () / first_value(training_time) OVER () > limit_training_time
-                        OR last_value(accuracy_training) OVER () - first_value(accuracy_training) OVER () < limit_accuracy_change
-                        OR last_value(accuracy_evaluation) OVER () - first_value(accuracy_evaluation) OVER () < limit_accuracy_change
-                        OR ( first_value(accuracy_training) OVER () <  last_value(accuracy_training) OVER ()
-                        AND first_value(val_accuracy) OVER () > last_value(val_accuracy) OVER ()))
-                        THEN 1
+                        WHEN (last_value(accuracy_training) OVER () < accuracy_goal
+                            AND last_value(training_time) OVER () < limit_training_time*60 
+                            AND (last_value(accuracy_training) OVER () > first_value(accuracy_training) OVER ()
+                            AND last_value(val_accuracy) OVER () > first_value(val_accuracy) OVER ())
+                            AND last_value(accuracy_training) OVER () - first_value(accuracy_training) OVER () < limit_accuracy_change)
                         ELSE 0
                     END
                 FROM
