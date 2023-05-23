@@ -149,6 +149,9 @@ class FlowerServer:
         monetdb_settings = cp["MonetDB Settings"]
         self.set_attribute("monetdb_settings", monetdb_settings)
 
+        mongodb_settings = cp["MongoDB Settings"]
+        self.set_attribute("mongodb_settings", mongodb_settings)
+
         conn = connect(
             hostname=monetdb_settings["hostname"],
             port=monetdb_settings["port"],
@@ -395,7 +398,7 @@ class FlowerServer:
                 cursor.close()
                 conn.close()
 
-                db = self.get_connection_mongodb('localhost', 27017)
+                db = self.get_connection_mongodb()
                 pesos = db.checkpoints.find_one({"round": {"$eq": last_round}})
         
                 params = pickle.loads(pesos["global_weights"])
@@ -642,8 +645,9 @@ class FlowerServer:
             self.log_message(message, "INFO")
         return config
 
-    def get_connection_mongodb(self, host, port):
-        client = MongoClient(host=host, port=port)
+    def get_connection_mongodb(self):
+        client = MongoClient(host=self.mongodb_settings["hostname"],
+                             port=self.mongodb_settings["port"])
         return client.flowerprov
 
     def on_fit_config_fn(self, fl_round: int) -> Optional[dict]:
@@ -848,7 +852,7 @@ class FlowerServer:
             "global_weights": Binary(pickle.dumps(self.global_model_parameters, protocol=4)),
         }
 
-        db = self.get_connection_mongodb("localhost", 27017)
+        db = self.get_connection_mongodb()
         _id = db.checkpoints.insert_one(checkpoints)
 
         to_dfanalyzer = [
