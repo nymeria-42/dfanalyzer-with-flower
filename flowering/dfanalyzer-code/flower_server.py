@@ -386,7 +386,7 @@ class FlowerServer:
             conn.commit()
             ending_fl = cursor.fetchone()[0]
 
-            if ending_fl[0] == False:
+            if ending_fl == False:
 
                 cursor.execute(
                 f'SELECT check_last_round_fl({self.server_id-1});'
@@ -647,7 +647,7 @@ class FlowerServer:
 
     def get_connection_mongodb(self):
         client = MongoClient(host=self.mongodb_settings["hostname"],
-                             port=self.mongodb_settings["port"])
+                             port=int(self.mongodb_settings["port"]))
         return client.flowerprov
 
     def on_fit_config_fn(self, fl_round: int) -> Optional[dict]:
