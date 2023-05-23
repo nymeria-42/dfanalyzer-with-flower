@@ -170,8 +170,8 @@ class Client(NumPyClient):
                 pickle.dumps(weight_tensors_list, protocol=2)
             ),
         }
-        db = self.get_connection_mongodb("localhost", 27017)
-        _id = db.local_weights.insert_one(local_weights)
+        # db = self.get_connection_mongodb("localhost", 27017)
+        # _id = db.local_weights.insert_one(local_weights)
 
         to_dfanalyzer = [
             self.client_id,
@@ -182,7 +182,8 @@ class Client(NumPyClient):
             training_metrics["loss"],
             training_metrics.get("val_loss", None),
             training_metrics.get("val_sparse_categorical_accuracy", None),
-            _id.inserted_id,
+            # _id.inserted_id,
+            0,
             starting_time,
             time.ctime(),
         ]
