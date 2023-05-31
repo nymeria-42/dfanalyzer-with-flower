@@ -42,9 +42,25 @@ tf1_output = Set("oServerConfig", SetType.OUTPUT, [])
 tf1.set_sets([tf1_input, tf1_output])
 df.add_transformation(tf1)
 
-tf2 = Transformation("Strategy")
+tf2 = Transformation("LoadGlobalParameters")
 
 tf2_input = Set(
+    "iLoadGlobalParameters",
+    SetType.INPUT,
+    [
+        Attribute("starting_time", AttributeType.TEXT),
+        Attribute("ending_time", AttributeType.TEXT),
+        Attribute("loading_time", AttributeType.TEXT),
+    ],
+)
+tf2_output = Set("oLoadGlobalParameters", SetType.OUTPUT, [])
+tf2.set_sets([tf2_input, tf2_output])
+df.add_transformation(tf2)
+
+
+tf3 = Transformation("Strategy")
+
+tf3_input = Set(
     "iStrategy",
     SetType.INPUT,
     [
@@ -52,12 +68,12 @@ tf2_input = Set(
         Attribute("server_momentum", AttributeType.NUMERIC),
     ],
 )
-tf2_output = Set("oStrategy", SetType.OUTPUT, [])
-tf2.set_sets([tf2_input, tf2_output])
-df.add_transformation(tf2)
+tf3_output = Set("oStrategy", SetType.OUTPUT, [])
+tf3.set_sets([tf3_input, tf3_output])
+df.add_transformation(tf3)
 
-tf3 = Transformation("DatasetLoad")
-tf3_input = Set(
+tf4 = Transformation("DatasetLoad")
+tf4_input = Set(
     "iDatasetLoad",
     SetType.INPUT,
     [
@@ -65,12 +81,12 @@ tf3_input = Set(
         Attribute("loading_time", AttributeType.TEXT),
     ],
 )
-tf3_output = Set("oDatasetLoad", SetType.OUTPUT, [])
-tf3.set_sets([tf3_input, tf3_output])
-df.add_transformation(tf3)
+tf4_output = Set("oDatasetLoad", SetType.OUTPUT, [])
+tf4.set_sets([tf4_input, tf4_output])
+df.add_transformation(tf4)
 
-tf4 = Transformation("ModelConfig")
-tf4_input = Set(
+tf5 = Transformation("ModelConfig")
+tf5_input = Set(
     "iModelConfig",
     SetType.INPUT,
     [
@@ -93,17 +109,17 @@ tf4_input = Set(
     ],
 )
 
-tf4_output = Set(
+tf5_output = Set(
     "oModelConfig",
     SetType.OUTPUT,
     [],
 )
 
-tf4.set_sets([tf4_input, tf4_output])
-df.add_transformation(tf4)
+tf5.set_sets([tf5_input, tf5_output])
+df.add_transformation(tf5)
 
-tf5 = Transformation("OptimizerConfig")
-tf5_input = Set(
+tf6 = Transformation("OptimizerConfig")
+tf6_input = Set(
     "iOptimizerConfig",
     SetType.INPUT,
     [
@@ -114,17 +130,17 @@ tf5_input = Set(
     ],
 )
 
-tf5_output = Set(
+tf6_output = Set(
     "oOptimizerConfig",
     SetType.OUTPUT,
     [],
 )
 
-tf5.set_sets([tf5_input, tf5_output])
-df.add_transformation(tf5)
+tf6.set_sets([tf6_input, tf6_output])
+df.add_transformation(tf6)
 
-tf6 = Transformation("LossConfig")
-tf6_input = Set(
+tf7 = Transformation("LossConfig")
+tf7_input = Set(
     "iLossConfig",
     SetType.INPUT,
     [
@@ -134,17 +150,17 @@ tf6_input = Set(
         Attribute("name", AttributeType.TEXT),
     ],
 )
-tf6_output = Set(
+tf7_output = Set(
     "oLossConfig",
     SetType.OUTPUT,
     [],
 )
 
-tf6.set_sets([tf6_input, tf6_output])
-df.add_transformation(tf6)
+tf7.set_sets([tf7_input, tf7_output])
+df.add_transformation(tf7)
 
-tf7 = Transformation("TrainingConfig")
-tf7_input = Set(
+tf8 = Transformation("TrainingConfig")
+tf8_input = Set(
     "iTrainingConfig",
     SetType.INPUT,
     [
@@ -162,7 +178,7 @@ tf7_input = Set(
     ],
 )
 
-tf7_output = Set(
+tf8_output = Set(
     "oTrainingConfig",
     SetType.OUTPUT,
     [
@@ -177,13 +193,16 @@ tf1_output.dependency = tf1._tag
 tf2_output.set_type(SetType.INPUT)
 tf2_output.dependency = tf2._tag
 
-tf7.set_sets([tf1_output, tf2_output, tf7_input, tf7_output])
+tf3_output.set_type(SetType.INPUT)
+tf3_output.dependency = tf3._tag
 
-df.add_transformation(tf7)
+tf8.set_sets([tf1_output, tf2_output, tf3_output, tf8_input, tf8_output])
 
-tf8 = Transformation("ClientTraining")
+df.add_transformation(tf8)
 
-tf8_output = Set(
+tf9 = Transformation("ClientTraining")
+
+tf9_output = Set(
     "oClientTraining",
     SetType.OUTPUT,
     [
@@ -201,9 +220,6 @@ tf8_output = Set(
     ],
 )
 
-tf3_output.set_type(SetType.INPUT)
-tf3_output.dependency = tf3._tag
-
 tf4_output.set_type(SetType.INPUT)
 tf4_output.dependency = tf4._tag
 
@@ -216,20 +232,23 @@ tf6_output.dependency = tf6._tag
 tf7_output.set_type(SetType.INPUT)
 tf7_output.dependency = tf7._tag
 
-tf8.set_sets(
+tf8_output.set_type(SetType.INPUT)
+tf8_output.dependency = tf8._tag
+
+tf9.set_sets(
     [
-        tf3_output,
         tf4_output,
         tf5_output,
         tf6_output,
         tf7_output,
         tf8_output,
+        tf9_output,
     ]
 )
-df.add_transformation(tf8)
+df.add_transformation(tf9)
 
-tf9 = Transformation("ServerTrainingAggregation")
-tf9_output = Set(
+tf10 = Transformation("ServerTrainingAggregation")
+tf10_output = Set(
     "oServerTrainingAggregation",
     SetType.OUTPUT,
     [
@@ -242,20 +261,21 @@ tf9_output = Set(
         Attribute("val_accuracy", AttributeType.NUMERIC),
         Attribute("val_loss", AttributeType.NUMERIC),
         Attribute("weights_mongo_id", AttributeType.TEXT),
+        Attribute("insertion_time", AttributeType.TEXT),
         Attribute("training_time", AttributeType.NUMERIC),
         Attribute("starting_time", AttributeType.TEXT),
         Attribute("ending_time", AttributeType.TEXT),
     ],
 )
 
-tf8_output.set_type(SetType.INPUT)
-tf8_output.dependency = tf8._tag
+tf9_output.set_type(SetType.INPUT)
+tf9_output.dependency = tf9._tag
 
-tf9.set_sets([tf8_output, tf9_output])
-df.add_transformation(tf9)
+tf10.set_sets([tf9_output, tf10_output])
+df.add_transformation(tf10)
 
-tf10 = Transformation("EvaluationConfig")
-tf10_input = Set(
+tf11 = Transformation("EvaluationConfig")
+tf11_input = Set(
     "iEvaluationConfig",
     SetType.INPUT,
     [
@@ -264,21 +284,21 @@ tf10_input = Set(
     ],
 )
 
-tf10_output = Set(
+tf11_output = Set(
     "oEvaluationConfig",
     SetType.OUTPUT,
     [],
 )
 
-tf9_output.set_type(SetType.INPUT)
-tf9_output.dependency = tf9._tag
+tf10_output.set_type(SetType.INPUT)
+tf10_output.dependency = tf10._tag
 
-tf10.set_sets([tf9_output, tf10_input, tf10_output])
-df.add_transformation(tf10)
+tf11.set_sets([tf10_output, tf11_input, tf11_output])
+df.add_transformation(tf11)
 
-tf11 = Transformation("ClientEvaluation")
+tf12 = Transformation("ClientEvaluation")
 
-tf11_output = Set(
+tf12_output = Set(
     "oClientEvaluation",
     SetType.OUTPUT,
     [
@@ -293,15 +313,15 @@ tf11_output = Set(
     ],
 )
 
-tf10_output.set_type(SetType.INPUT)
-tf10_output.dependency = tf10._tag
+tf11_output.set_type(SetType.INPUT)
+tf11_output.dependency = tf11._tag
 
-tf11.set_sets([tf10_output, tf11_output])
-df.add_transformation(tf11)
+tf12.set_sets([tf11_output, tf12_output])
+df.add_transformation(tf12)
 
-tf12 = Transformation("ServerEvaluationAggregation")
+tf13 = Transformation("ServerEvaluationAggregation")
 
-tf12_output = Set(
+tf13_output = Set(
     "oServerEvaluationAggregation",
     SetType.OUTPUT,
     [
@@ -317,19 +337,19 @@ tf12_output = Set(
     ],
 )
 
-tf11_output.set_type(SetType.INPUT)
-tf11_output.dependency = tf11._tag
-
-tf12.set_sets([tf11_output, tf12_output])
-df.add_transformation(tf12)
-
 tf12_output.set_type(SetType.INPUT)
 tf12_output.dependency = tf12._tag
 
-tf7 = Transformation("TrainingConfig")
+tf13.set_sets([tf11_output, tf13_output])
+df.add_transformation(tf13)
 
-tf7.set_sets([tf12_output])
-df.add_transformation(tf7)
+tf8 = Transformation("TrainingConfig")
+
+tf13_output.set_type(SetType.INPUT)
+tf13_output.dependency = tf13._tag
+
+tf8.set_sets([tf13_output])
+df.add_transformation(tf8)
 
 df.save()
 tries = 0
@@ -451,7 +471,6 @@ while tries < 100:
                 iServerConfig as sc;
         END;"""
         )
-
 
         conn.commit()
         cursor.close()

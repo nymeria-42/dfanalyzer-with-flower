@@ -65,9 +65,7 @@ class FlowerServer:
 
     @staticmethod
     def parse_config_section(config_parser: ConfigParser, section_name: str) -> dict:
-        parsed_section = {
-            key: value for key, value in config_parser[section_name].items()
-        }
+        parsed_section = {key: value for key, value in config_parser[section_name].items()}
         for key, value in parsed_section.items():
             if value == "None":
                 parsed_section[key] = None
@@ -80,9 +78,7 @@ class FlowerServer:
             elif value.replace(".", "", 1).isdigit():
                 parsed_section[key] = float(value)
             elif not findall(r"%\(.*?\)s+", value) and findall(r"\[.*?]+", value):
-                aux_list = (
-                    value.replace("[", "").replace("]", "").replace(" ", "").split(",")
-                )
+                aux_list = value.replace("[", "").replace("]", "").replace(" ", "").split(",")
                 for index, item in enumerate(aux_list):
                     if item.isdigit():
                         aux_list[index] = int(item)
@@ -90,9 +86,7 @@ class FlowerServer:
                         aux_list[index] = float(item)
                 parsed_section[key] = aux_list
             elif not findall(r"%\(.*?\)s+", value) and findall(r"\(.*?\)+", value):
-                aux_list = (
-                    value.replace("(", "").replace(")", "").replace(" ", "").split(",")
-                )
+                aux_list = value.replace("(", "").replace(")", "").replace(" ", "").split(",")
                 for index, item in enumerate(aux_list):
                     if item.isdigit():
                         aux_list[index] = int(item)
@@ -101,9 +95,7 @@ class FlowerServer:
                 parsed_section[key] = tuple(aux_list)
             elif not findall(r"%\(.*?\)s+", value) and findall(r"\{.*?}+", value):
                 aux_dict = {}
-                aux_list = (
-                    value.replace("{", "").replace("}", "").replace(" ", "").split(",")
-                )
+                aux_list = value.replace("{", "").replace("}", "").replace(" ", "").split(",")
                 for item in aux_list:
                     pair_item = item.split(":")
                     pair_key = pair_item[0]
@@ -159,13 +151,11 @@ class FlowerServer:
             password=monetdb_settings["password"],
             database=monetdb_settings["database"],
         )
-    
+
         cursor = conn.cursor()
 
-        cursor.execute(
-            f'SELECT check_max_server_id();'
-            )
-        
+        cursor.execute(f"SELECT check_max_server_id();")
+
         conn.commit()
 
         max_server_id = cursor.fetchone()[0]
@@ -175,23 +165,19 @@ class FlowerServer:
         else:
             self.server_id = 0
 
-        cursor.execute(
-            f'SELECT check_ending_fl({self.server_id - 1});'
-            )
-        
+        cursor.execute(f"SELECT check_ending_fl({self.server_id - 1});")
+
         conn.commit()
         ending_fl = cursor.fetchone()[0]
 
         if ending_fl == False:
-            cursor.execute(
-            f'SELECT check_last_round_fl({self.server_id - 1});'
-            )
+            cursor.execute(f"SELECT check_last_round_fl({self.server_id - 1});")
 
             conn.commit()
             last_round = cursor.fetchone()[0]
-            
+
             if last_round:
-                fl_settings["num_rounds"]  -= last_round
+                fl_settings["num_rounds"] -= last_round
         cursor.close()
         conn.close()
 
@@ -247,16 +233,12 @@ class FlowerServer:
         training_hyper_parameters_settings = self.parse_config_section(
             cp, "Training Hyper-parameters Settings"
         )
-        self.set_attribute(
-            "training_hyper_parameters_settings", training_hyper_parameters_settings
-        )
+        self.set_attribute("training_hyper_parameters_settings", training_hyper_parameters_settings)
         # Parse 'Testing Hyper-parameters Settings' and Set Attributes.
         testing_hyper_parameters_settings = self.parse_config_section(
             cp, "Testing Hyper-parameters Settings"
         )
-        self.set_attribute(
-            "testing_hyper_parameters_settings", testing_hyper_parameters_settings
-        )
+        self.set_attribute("testing_hyper_parameters_settings", testing_hyper_parameters_settings)
         # If Dynamic Adjustment of Hyper-parameters is Enabled...
         if fl_settings["enable_hyper_parameters_dynamic_adjustment"]:
             # Parse 'Hyper-parameters Dynamic Adjustment Settings' and Set Attributes.
@@ -271,18 +253,14 @@ class FlowerServer:
             adjustments_policies_settings = self.parse_config_section(
                 cp, "Adjustments Policies Settings"
             )
-            self.set_attribute(
-                "adjustments_policies_settings", adjustments_policies_settings
-            )
+            self.set_attribute("adjustments_policies_settings", adjustments_policies_settings)
             # If Dynamic Adjustment of Training Hyper-parameters is Enabled...
             if hyper_parameters_dynamic_adjustment_settings[
                 "dynamically_adjust_training_hyper_parameters"
             ]:
                 # Parse 'Training Hyper-parameters Dynamic Adjustment Settings' and Set Attributes.
-                training_hyper_parameters_dynamic_adjustment_settings = (
-                    self.parse_config_section(
-                        cp, "Training Hyper-parameters Dynamic Adjustment Settings"
-                    )
+                training_hyper_parameters_dynamic_adjustment_settings = self.parse_config_section(
+                    cp, "Training Hyper-parameters Dynamic Adjustment Settings"
                 )
                 self.set_attribute(
                     "training_hyper_parameters_dynamic_adjustment_settings",
@@ -293,10 +271,8 @@ class FlowerServer:
                 "dynamically_adjust_testing_hyper_parameters"
             ]:
                 # Parse 'Testing Hyper-parameters Dynamic Adjustment Settings' and Set Attributes.
-                testing_hyper_parameters_dynamic_adjustment_settings = (
-                    self.parse_config_section(
-                        cp, "Testing Hyper-parameters Dynamic Adjustment Settings"
-                    )
+                testing_hyper_parameters_dynamic_adjustment_settings = self.parse_config_section(
+                    cp, "Testing Hyper-parameters Dynamic Adjustment Settings"
                 )
                 self.set_attribute(
                     "testing_hyper_parameters_dynamic_adjustment_settings",
@@ -377,20 +353,22 @@ class FlowerServer:
             database=monetdb_settings["database"],
         )
 
+        starting_time = time.ctime()
+        loading_parameters_start = perf_counter()
+        t2 = Task(2, dataflow_tag, "LoadGlobalParameters")
+        t2.begin()
+
+        params = None
         if self.server_id != 0:
-            
+
             cursor = conn.cursor()
-            cursor.execute(
-                f'SELECT check_ending_fl({self.server_id-1});'
-                )
+            cursor.execute(f"SELECT check_ending_fl({self.server_id-1});")
             conn.commit()
             ending_fl = cursor.fetchone()[0]
 
             if ending_fl == False:
 
-                cursor.execute(
-                f'SELECT check_last_round_fl({self.server_id-1});'
-                )
+                cursor.execute(f"SELECT check_last_round_fl({self.server_id-1});")
 
                 conn.commit()
                 last_round = cursor.fetchone()[0]
@@ -400,14 +378,21 @@ class FlowerServer:
 
                 db = self.get_connection_mongodb()
                 pesos = db.checkpoints.find_one({"round": {"$eq": last_round}})
-        
                 params = pickle.loads(pesos["global_weights"])
-                
-                return ndarrays_to_parameters(params)  
 
-        return None
-    
-    
+        ending_time = time.ctime()
+        loading_parameters_end = perf_counter() - loading_parameters_start
+
+        to_dfanalyzer = [starting_time, ending_time, loading_parameters_end]
+        t2_input = DataSet("iLoadGlobalParameters", [Element(to_dfanalyzer)])
+        t2.add_dataset(t2_input)
+        to_dfanalyzer = [bool(params)]
+        t2_output = DataSet("oLoadGlobalParameters", [Element([to_dfanalyzer])])
+        t2.add_dataset(t2_output)
+        t2.end()
+
+        return ndarrays_to_parameters(params) if params else None
+
     def load_initial_fit_config(self) -> dict:
         training_hyper_parameters_settings = self.get_attribute(
             "training_hyper_parameters_settings"
@@ -422,9 +407,7 @@ class FlowerServer:
         return fit_config
 
     def load_initial_evaluate_config(self) -> dict:
-        testing_hyper_parameters_settings = self.get_attribute(
-            "testing_hyper_parameters_settings"
-        )
+        testing_hyper_parameters_settings = self.get_attribute("testing_hyper_parameters_settings")
         evaluate_config = {"fl_round": 0}
         evaluate_config.update(testing_hyper_parameters_settings)
         # Log the Initial Testing Configuration (If Logger is Enabled for "DEBUG" Level).
@@ -439,9 +422,7 @@ class FlowerServer:
     def get_grpc_listen_ip_address_and_port(self) -> str:
         grpc_settings = self.get_attribute("grpc_settings")
         return (
-            grpc_settings["grpc_listen_ip_address"]
-            + ":"
-            + str(grpc_settings["grpc_listen_port"])
+            grpc_settings["grpc_listen_ip_address"] + ":" + str(grpc_settings["grpc_listen_port"])
         )
 
     def get_grpc_max_message_length_in_bytes(self) -> int:
@@ -452,8 +433,8 @@ class FlowerServer:
         return SimpleClientManager()
 
     # @staticmethod
-    def evaluate_fn(self, 
-        fl_round: int, global_model_parameters: NDArrays, evaluate_config: dict
+    def evaluate_fn(
+        self, fl_round: int, global_model_parameters: NDArrays, evaluate_config: dict
     ) -> Optional[Metrics]:
         """Server-side (Centralized) evaluation function called by Flower after every training round.
         \nRequires a server-side dataset to evaluate the newly aggregated model without sending it to the Clients.
@@ -461,9 +442,9 @@ class FlowerServer:
         \nAlternative: Client-side (Federated) evaluation."""
 
         self.set_attribute(
-                "global_model_parameters",
-                global_model_parameters,
-            )    
+            "global_model_parameters",
+            global_model_parameters,
+        )
 
         return None
 
@@ -522,9 +503,7 @@ class FlowerServer:
         fl_round = self.get_attribute("fl_round")
         while tries < 100 and not result:
             cursor.execute(
-                monetdb_settings["check_if_last_round_is_already_recorded"].format(
-                    fl_round
-                )
+                monetdb_settings["check_if_last_round_is_already_recorded"].format(fl_round)
             )
             connection.commit()
             result = cursor.fetchone()
@@ -551,33 +530,25 @@ class FlowerServer:
         self.log_message(message, "INFO")
         return is_fl_round_eligible
 
-    def is_fl_round_eligible_for_hyper_parameters_dynamic_adjustment(
-        self, phase: str
-    ) -> bool:
+    def is_fl_round_eligible_for_hyper_parameters_dynamic_adjustment(self, phase: str) -> bool:
         hyper_parameters_dynamic_adjustment_settings = self.get_attribute(
             "hyper_parameters_dynamic_adjustment_settings"
         )
-        initial_round_candidate_for_adjustments = (
-            hyper_parameters_dynamic_adjustment_settings[
-                "initial_round_candidate_for_adjustments"
-            ]
-        )
+        initial_round_candidate_for_adjustments = hyper_parameters_dynamic_adjustment_settings[
+            "initial_round_candidate_for_adjustments"
+        ]
         fl_round = self.get_attribute("fl_round")
         if fl_round < initial_round_candidate_for_adjustments:
             return False
-        adjustments_eligibility_controller = (
-            hyper_parameters_dynamic_adjustment_settings[
-                "adjustments_eligibility_controller"
-            ]
-        )
+        adjustments_eligibility_controller = hyper_parameters_dynamic_adjustment_settings[
+            "adjustments_eligibility_controller"
+        ]
         if adjustments_eligibility_controller == "Random":
             return self.execute_random_eligibility(phase)
         if adjustments_eligibility_controller == "MonetDB":
             return self.execute_monetdb_eligibility_query(phase)
 
-    def adjust_hyper_parameter_value(
-        self, old_value: Any, adjustment_policy: str
-    ) -> Any:
+    def adjust_hyper_parameter_value(self, old_value: Any, adjustment_policy: str) -> Any:
         adjusted_value = None
         adjustment_operation_text = self.get_attribute("adjustments_policies_settings")[
             adjustment_policy
@@ -619,35 +590,33 @@ class FlowerServer:
             hyper_parameters_to_adjust = self.get_attribute(
                 "testing_hyper_parameters_dynamic_adjustment_settings"
             )["to_adjust"]
-        adjustments_policies_settings = self.get_attribute(
-            "adjustments_policies_settings"
-        )
+        adjustments_policies_settings = self.get_attribute("adjustments_policies_settings")
         if hyper_parameters_to_adjust:
             for (
                 hyper_parameter,
                 adjustment_policy,
             ) in hyper_parameters_to_adjust.items():
-                if (
-                    hyper_parameter in config
-                    and adjustment_policy in adjustments_policies_settings
-                ):
+                if hyper_parameter in config and adjustment_policy in adjustments_policies_settings:
                     hyper_parameter_old_value = config[hyper_parameter]
                     hyper_parameter_new_value = self.adjust_hyper_parameter_value(
                         hyper_parameter_old_value, adjustment_policy
                     )
                     config.update({hyper_parameter: hyper_parameter_new_value})
             # Log the Dynamic Configuration Adjustment Notice (If Logger is Enabled for "INFO" Level).
-            message = "[Server {0} | FL Round {1}] {2} Dynamically Adjusted (Eligible FL Round).".format(
-                self.get_attribute("server_id"),
-                self.get_attribute("fl_round"),
-                config_name,
+            message = (
+                "[Server {0} | FL Round {1}] {2} Dynamically Adjusted (Eligible FL Round).".format(
+                    self.get_attribute("server_id"),
+                    self.get_attribute("fl_round"),
+                    config_name,
+                )
             )
             self.log_message(message, "INFO")
         return config
 
     def get_connection_mongodb(self):
-        client = MongoClient(host=self.mongodb_settings["hostname"],
-                             port=int(self.mongodb_settings["port"]))
+        client = MongoClient(
+            host=self.mongodb_settings["hostname"], port=int(self.mongodb_settings["port"])
+        )
         return client.flowerprov
 
     def on_fit_config_fn(self, fl_round: int) -> Optional[dict]:
@@ -668,12 +637,8 @@ class FlowerServer:
         # Dynamically Adjust the Training Configuration's Hyper-parameters (If Enabled and Eligible).
         dynamically_adjusted = False
         if self.is_enabled_hyper_parameters_dynamic_adjustment("train"):
-            if self.is_fl_round_eligible_for_hyper_parameters_dynamic_adjustment(
-                "train"
-            ):
-                fit_config = self.dynamically_adjust_hyper_parameters(
-                    "train", fit_config
-                )
+            if self.is_fl_round_eligible_for_hyper_parameters_dynamic_adjustment("train"):
+                fit_config = self.dynamically_adjust_hyper_parameters("train", fit_config)
                 dynamically_adjusted = True
 
         # Store the Training Configuration Changes.
@@ -686,23 +651,33 @@ class FlowerServer:
         # Replace All Values of None Type to "None" String (Necessary Workaround on Flower v1.1.0).
         fit_config = {k: ("None" if v is None else v) for k, v in fit_config.items()}
 
-        t7 = Task(7 + 6 * (fl_round - 1), dataflow_tag, "TrainingConfig")
+        t8 = Task(8 + 6 * (fl_round - 1), dataflow_tag, "TrainingConfig")
         if fl_round == 1:
-            t7.add_dependency(
+            t8.add_dependency(
                 Dependency(
-                    ["serverconfig", "strategy", "serverevaluationaggregation"],
-                    ["1", "2", "0"],
+                    [
+                        "serverconfig",
+                        "loadglobalparameters",
+                        "strategy",
+                        "serverevaluationaggregation",
+                    ],
+                    ["1", "2", "3", "0"],
                 )
             )
         else:
-            t7.add_dependency(
+            t8.add_dependency(
                 Dependency(
-                    ["serverconfig", "strategy", "serverevaluationaggregation"],
-                    ["1", "2", str(12 + 6 * (fl_round - 2))],
+                    [
+                        "serverconfig",
+                        "loadglobalparameters",
+                        "strategy",
+                        "serverevaluationaggregation",
+                    ],
+                    ["1", "2", "3", str(13 + 6 * (fl_round - 2))],
                 )
             )
 
-        t7.begin()
+        t8.begin()
 
         attributes = [
             "shuffle",
@@ -721,15 +696,15 @@ class FlowerServer:
             time.ctime(),
         ] + [fit_config.get(attr, 0) for attr in attributes]
 
-        t7_input = DataSet("iTrainingConfig", [Element(to_dfanalyzer)])
+        t8_input = DataSet("iTrainingConfig", [Element(to_dfanalyzer)])
 
-        t7.add_dataset(t7_input)
-        t7_output = DataSet(
+        t8.add_dataset(t8_input)
+        t8_output = DataSet(
             "oTrainingConfig",
             [Element([fl_round, dynamically_adjusted])],
         )
-        t7.add_dataset(t7_output)
-        t7.end()
+        t8.add_dataset(t8_output)
+        t8.end()
 
         # Return the Training Configuration to be Sent to All Participating Clients.
         return fit_config
@@ -749,12 +724,8 @@ class FlowerServer:
         evaluate_config.update({"fl_round": self.get_attribute("fl_round")})
         # Dynamically Adjust the Testing Configuration's Hyper-parameters (If Enabled and Eligible).
         if self.is_enabled_hyper_parameters_dynamic_adjustment("test"):
-            if self.is_fl_round_eligible_for_hyper_parameters_dynamic_adjustment(
-                "test"
-            ):
-                evaluate_config = self.dynamically_adjust_hyper_parameters(
-                    "test", evaluate_config
-                )
+            if self.is_fl_round_eligible_for_hyper_parameters_dynamic_adjustment("test"):
+                evaluate_config = self.dynamically_adjust_hyper_parameters("test", evaluate_config)
         # Store the Testing Configuration Changes.
         self.set_attribute("evaluate_config", evaluate_config)
         # Log the Testing Configuration (If Logger is Enabled for "DEBUG" Level).
@@ -765,28 +736,24 @@ class FlowerServer:
         )
         self.log_message(message, "DEBUG")
         # Replace All Values of None Type to "None" String (Necessary Workaround on Flower v1.1.0).
-        evaluate_config = {
-            k: ("None" if v is None else v) for k, v in evaluate_config.items()
-        }
+        evaluate_config = {k: ("None" if v is None else v) for k, v in evaluate_config.items()}
         # Return the Testing Configuration to be Sent to All Participating Clients.
 
-        t10 = Task(
-            10 + 6 * (fl_round - 1),
+        t11 = Task(
+            11 + 6 * (fl_round - 1),
             dataflow_tag,
             "EvaluationConfig",
-            dependency=Task(
-                9 + 6 * (fl_round - 1), dataflow_tag, "ServerTrainingAggregation"
-            ),
+            dependency=Task(10 + 6 * (fl_round - 1), dataflow_tag, "ServerTrainingAggregation"),
         )
-        t10.begin()
+        t11.begin()
         attributes = ["batch_size", "steps"]
         to_dfanalyzer = [evaluate_config.get(attr, 0) for attr in attributes]
 
-        t10_input = DataSet("iEvaluationConfig", [Element(to_dfanalyzer)])
-        t10.add_dataset(t10_input)
-        t10_output = DataSet("oEvaluationConfig", [Element([])])
-        t10.add_dataset(t10_output)
-        t10.end()
+        t11_input = DataSet("iEvaluationConfig", [Element(to_dfanalyzer)])
+        t11.add_dataset(t11_input)
+        t11_output = DataSet("oEvaluationConfig", [Element([])])
+        t11.add_dataset(t11_output)
+        t11.end()
 
         # Return the Testing Configuration to be Sent to All Participating Clients.
         return evaluate_config
@@ -795,18 +762,18 @@ class FlowerServer:
         self, training_metrics: List[Tuple[int, Metrics]]
     ) -> Optional[Metrics]:
         """Metrics aggregation function called by Flower after every training round."""
-        t9 = Task(
-            9 + 6 * (self.get_attribute("fl_round") - 1),
+        t10 = Task(
+            10 + 6 * (self.get_attribute("fl_round") - 1),
             dataflow_tag,
             "ServerTrainingAggregation",
             dependency=Task(
-                8 + 6 * (self.get_attribute("fl_round") - 1),
+                9 + 6 * (self.get_attribute("fl_round") - 1),
                 dataflow_tag,
                 "ClientTraining",
             ),
         )
         starting_time = time.ctime()
-        t9.begin()
+        t10.begin()
 
         # Get the Total Number of Participating Clients.
         total_num_clients = len(training_metrics)
@@ -817,8 +784,7 @@ class FlowerServer:
         metrics_products_list = []
         for metric_name in metrics_names_list:
             metric_product = [
-                num_examples * metric[metric_name]
-                for num_examples, metric in training_metrics
+                num_examples * metric[metric_name] for num_examples, metric in training_metrics
             ]
             metrics_products_list.append(metric_product)
         # Get the Total Number of Training Examples (of All Participating Clients).
@@ -827,9 +793,7 @@ class FlowerServer:
         aggregated_metrics = {}
         for metric_index in range(0, len(metrics_names_list)):
             metric_name = metrics_names_list[metric_index]
-            weighted_average_metric = (
-                sum(metrics_products_list[metric_index]) / total_num_examples
-            )
+            weighted_average_metric = sum(metrics_products_list[metric_index]) / total_num_examples
             aggregated_metrics[metric_name] = weighted_average_metric
 
         # Log the Aggregated Training Metrics (If Logger is Enabled for "INFO" Level).
@@ -852,9 +816,10 @@ class FlowerServer:
             "global_weights": Binary(pickle.dumps(self.global_model_parameters, protocol=4)),
         }
 
+        starting_time = perf_counter()
         db = self.get_connection_mongodb()
         _id = db.checkpoints.insert_one(checkpoints)
-
+        insertion_time = perf_counter() - starting_time
         to_dfanalyzer = [
             self.get_attribute("server_id"),
             self.get_attribute("fl_round"),
@@ -865,13 +830,14 @@ class FlowerServer:
             aggregated_metrics["val_sparse_categorical_accuracy"],
             aggregated_metrics["val_loss"],
             _id.inserted_id,
+            insertion_time,
             aggregated_metrics["fit_time"],
             starting_time,
             time.ctime(),
         ]
-        t9_output = DataSet("oServerTrainingAggregation", [Element(to_dfanalyzer)])
-        t9.add_dataset(t9_output)
-        t9.end()
+        t10_output = DataSet("oServerTrainingAggregation", [Element(to_dfanalyzer)])
+        t10.add_dataset(t10_output)
+        t10.end()
         # Return the Aggregated Training Metrics.
         return aggregated_metrics
 
@@ -880,19 +846,19 @@ class FlowerServer:
     ) -> Optional[Metrics]:
         """Metrics aggregation function called by Flower after every testing round."""
         # Get the Total Number of Participating Clients.
-        t12 = Task(
-            12 + 6 * (self.get_attribute("fl_round") - 1),
+        t13 = Task(
+            13 + 6 * (self.get_attribute("fl_round") - 1),
             dataflow_tag,
             "ServerEvaluationAggregation",
             dependency=Task(
-                11 + 6 * (self.get_attribute("fl_round") - 1),
+                12 + 6 * (self.get_attribute("fl_round") - 1),
                 dataflow_tag,
                 "clientevaluation",
             ),
         )
 
         starting_time = time.ctime()
-        t12.begin()
+        t13.begin()
 
         total_num_clients = len(testing_metrics)
         # Get the Testing Metrics Names.
@@ -902,8 +868,7 @@ class FlowerServer:
         metrics_products_list = []
         for metric_name in metrics_names_list:
             metric_product = [
-                num_examples * metric[metric_name]
-                for num_examples, metric in testing_metrics
+                num_examples * metric[metric_name] for num_examples, metric in testing_metrics
             ]
             metrics_products_list.append(metric_product)
         # Get the Total Number of Testing Examples (of All Participating Clients).
@@ -912,9 +877,7 @@ class FlowerServer:
         aggregated_metrics = {}
         for metric_index in range(0, len(metrics_names_list)):
             metric_name = metrics_names_list[metric_index]
-            weighted_average_metric = (
-                sum(metrics_products_list[metric_index]) / total_num_examples
-            )
+            weighted_average_metric = sum(metrics_products_list[metric_index]) / total_num_examples
             aggregated_metrics[metric_name] = weighted_average_metric
 
         # Log the Aggregated Testing Metrics (If Logger is Enabled for "INFO" Level).
@@ -943,9 +906,9 @@ class FlowerServer:
             time.ctime(),
         ]
 
-        t12_output = DataSet("oServerEvaluationAggregation", [Element(to_dfanalyzer)])
-        t12.add_dataset(t12_output)
-        t12.end()
+        t13_output = DataSet("oServerEvaluationAggregation", [Element(to_dfanalyzer)])
+        t13.add_dataset(t13_output)
+        t13.end()
         # Return the Aggregated Testing Metrics.
         return aggregated_metrics
 
@@ -958,9 +921,9 @@ class FlowerServer:
         cp.read(filenames=server_config_file, encoding="utf-8")
         fl_settings = self.get_attribute("fl_settings")
         server_aggregation_strategy = None
-        t2 = Task(2, dataflow_tag, "Strategy")
+        t3 = Task(3, dataflow_tag, "Strategy")
 
-        t2.begin()
+        t3.begin()
         if fl_settings["server_aggregation_strategy"] == "FedAvg":
             # FedAvg - Federated Averaging Aggregation Strategy.
             server_aggregation_strategy = FedAvg(
@@ -973,14 +936,12 @@ class FlowerServer:
                 on_fit_config_fn=self.on_fit_config_fn,
                 on_evaluate_config_fn=self.on_evaluate_config_fn,
                 accept_failures=fl_settings["accept_rounds_containing_failures"],
-                initial_parameters=self.get_attribute(
-                    "initial_global_model_parameters"
-                ),
+                initial_parameters=self.get_attribute("initial_global_model_parameters"),
                 fit_metrics_aggregation_fn=self.fit_metrics_aggregation_fn,
                 evaluate_metrics_aggregation_fn=self.evaluate_metrics_aggregation_fn,
             )
-            t2_input = DataSet("iStrategy", [Element([0, 0])])
-            t2.add_dataset(t2_input)
+            t3_input = DataSet("iStrategy", [Element([0, 0])])
+            t3.add_dataset(t3_input)
 
         elif fl_settings["server_aggregation_strategy"] == "FedAvgM":
             # Parse 'FedAvgM Settings'.
@@ -996,9 +957,7 @@ class FlowerServer:
                 on_fit_config_fn=self.on_fit_config_fn,
                 on_evaluate_config_fn=self.on_evaluate_config_fn,
                 accept_failures=fl_settings["accept_rounds_containing_failures"],
-                initial_parameters=self.get_attribute(
-                    "initial_global_model_parameters"
-                ),
+                initial_parameters=self.get_attribute("initial_global_model_parameters"),
                 fit_metrics_aggregation_fn=self.fit_metrics_aggregation_fn,
                 evaluate_metrics_aggregation_fn=self.evaluate_metrics_aggregation_fn,
                 server_learning_rate=fed_avg_m_settings["server_learning_rate"],
@@ -1007,11 +966,11 @@ class FlowerServer:
 
             attributes = ["server_learning_rate", "server_momentum"]
             to_dfanalyzer = [fed_avg_m_settings.get(attr, None) for attr in attributes]
-            t2_input = DataSet("iStrategy", [Element(to_dfanalyzer)])
-            t2.add_dataset(t2_input)
-        t2_output = DataSet("oStrategy", [Element([])])
-        t2.add_dataset(t2_output)
-        t2.end()
+            t3_input = DataSet("iStrategy", [Element(to_dfanalyzer)])
+            t3.add_dataset(t3_input)
+        t3_output = DataSet("oStrategy", [Element([])])
+        t3.add_dataset(t3_output)
+        t3.end()
         # Unbind ConfigParser Object (Garbage Collector).
         del cp
         return server_aggregation_strategy
@@ -1029,7 +988,7 @@ class FlowerServer:
 
     def instantiate_flower_server_config(self) -> ServerConfig:
         fl_settings = self.get_attribute("fl_settings")
-        # Instantiate Flower Server's Config.   
+        # Instantiate Flower Server's Config.
         flower_server_config = ServerConfig(
             num_rounds=fl_settings["num_rounds"],
             round_timeout=fl_settings["round_timeout_in_seconds"],
@@ -1082,447 +1041,9 @@ class FlowerServer:
 def main() -> None:
     # Begin.
 
-    ##########
-    # DfAnalyzer Instrumentation
-    # df = Dataflow(dataflow_tag)
-
-    # tf1 = Transformation("ServerConfig")
-    # tf1_input = Set(
-    #     "iServerConfig",
-    #     SetType.INPUT,
-    #     [
-    #         Attribute("server_id", AttributeType.NUMERIC),
-    #         Attribute("address", AttributeType.TEXT),
-    #         Attribute("max_message_length_in_bytes", AttributeType.TEXT),
-    #         Attribute("num_rounds", AttributeType.NUMERIC),
-    #         Attribute("round_timeout_in_seconds", AttributeType.NUMERIC),
-    #         Attribute("accept_rounds_with_failures", AttributeType.TEXT),
-    #         Attribute("enable_ssl", AttributeType.TEXT),
-    #         Attribute("enable_dynamic_adjustment", AttributeType.TEXT),
-    #         Attribute("server_aggregation_strategy", AttributeType.TEXT),
-    #         Attribute("fraction_fit", AttributeType.NUMERIC),
-    #         Attribute("fraction_evaluate", AttributeType.NUMERIC),
-    #         Attribute("min_fit_clients", AttributeType.NUMERIC),
-    #         Attribute("min_evaluate_clients", AttributeType.NUMERIC),
-    #         Attribute("min_available_clients", AttributeType.NUMERIC),
-    #     ],
-    # )
-    # tf1_output = Set("oServerConfig", SetType.OUTPUT, [])
-    # tf1.set_sets([tf1_input, tf1_output])
-    # df.add_transformation(tf1)
-
-    # tf2 = Transformation("Strategy")
-
-    # tf2_input = Set(
-    #     "iStrategy",
-    #     SetType.INPUT,
-    #     [
-    #         Attribute("server_learning_rate", AttributeType.NUMERIC),
-    #         Attribute("server_momentum", AttributeType.NUMERIC),
-    #     ],
-    # )
-    # tf2_output = Set("oStrategy", SetType.OUTPUT, [])
-    # tf2.set_sets([tf2_input, tf2_output])
-    # df.add_transformation(tf2)
-
-    # tf3 = Transformation("DatasetLoad")
-    # tf3_input = Set(
-    #     "iDatasetLoad",
-    #     SetType.INPUT,
-    #     [
-    #         Attribute("client_id", AttributeType.NUMERIC),
-    #         Attribute("loading_time", AttributeType.TEXT),
-    #     ],
-    # )
-    # tf3_output = Set("oDatasetLoad", SetType.OUTPUT, [])
-    # tf3.set_sets([tf3_input, tf3_output])
-    # df.add_transformation(tf3)
-
-    # tf4 = Transformation("ModelConfig")
-    # tf4_input = Set(
-    #     "iModelConfig",
-    #     SetType.INPUT,
-    #     [
-    #         Attribute("model", AttributeType.TEXT),
-    #         Attribute("optimizer", AttributeType.TEXT),
-    #         Attribute("loss_function", AttributeType.TEXT),
-    #         Attribute("loss_weights", AttributeType.TEXT),
-    #         Attribute("weighted_metrics", AttributeType.TEXT),
-    #         Attribute("run_eagerly", AttributeType.TEXT),
-    #         Attribute("steps_per_execution", AttributeType.NUMERIC),
-    #         Attribute("jit_compile", AttributeType.TEXT),
-    #         Attribute("input_shape", AttributeType.TEXT),
-    #         Attribute("alpha", AttributeType.NUMERIC),
-    #         Attribute("include_top", AttributeType.TEXT),
-    #         Attribute("weights", AttributeType.TEXT),
-    #         Attribute("input_tensor", AttributeType.TEXT),
-    #         Attribute("pooling", AttributeType.TEXT),
-    #         Attribute("classes", AttributeType.NUMERIC),
-    #         Attribute("classifier_activation", AttributeType.TEXT),
-    #     ],
-    # )
-
-    # tf4_output = Set(
-    #     "oModelConfig",
-    #     SetType.OUTPUT,
-    #     [],
-    # )
-
-    # tf4.set_sets([tf4_input, tf4_output])
-    # df.add_transformation(tf4)
-
-    # tf5 = Transformation("OptimizerConfig")
-    # tf5_input = Set(
-    #     "iOptimizerConfig",
-    #     SetType.INPUT,
-    #     [
-    #         Attribute("learning_rate", AttributeType.NUMERIC),
-    #         Attribute("momentum", AttributeType.NUMERIC),
-    #         Attribute("nesterov", AttributeType.TEXT),
-    #         Attribute("name", AttributeType.TEXT),
-    #     ],
-    # )
-
-    # tf5_output = Set(
-    #     "oOptimizerConfig",
-    #     SetType.OUTPUT,
-    #     [],
-    # )
-
-    # tf5.set_sets([tf5_input, tf5_output])
-    # df.add_transformation(tf5)
-
-    # tf6 = Transformation("LossConfig")
-    # tf6_input = Set(
-    #     "iLossConfig",
-    #     SetType.INPUT,
-    #     [
-    #         Attribute("from_logits", AttributeType.TEXT),
-    #         Attribute("ignore_class", AttributeType.TEXT),
-    #         Attribute("reduction", AttributeType.TEXT),
-    #         Attribute("name", AttributeType.TEXT),
-    #     ],
-    # )
-    # tf6_output = Set(
-    #     "oLossConfig",
-    #     SetType.OUTPUT,
-    #     [],
-    # )
-
-    # tf6.set_sets([tf6_input, tf6_output])
-    # df.add_transformation(tf6)
-
-    # tf7 = Transformation("TrainingConfig")
-    # tf7_input = Set(
-    #     "iTrainingConfig",
-    #     SetType.INPUT,
-    #     [
-    #         Attribute("server_id", AttributeType.NUMERIC),
-    #         Attribute("server_round", AttributeType.NUMERIC),
-    #         Attribute("starting_time", AttributeType.TEXT),
-    #         Attribute("ending_time", AttributeType.TEXT),
-    #         Attribute("shuffle", AttributeType.TEXT),
-    #         Attribute("batch_size", AttributeType.NUMERIC),
-    #         Attribute("initial_epoch", AttributeType.NUMERIC),
-    #         Attribute("epochs", AttributeType.NUMERIC),
-    #         Attribute("steps_per_epoch", AttributeType.TEXT),
-    #         Attribute("validation_split", AttributeType.NUMERIC),
-    #         Attribute("validation_batch_size", AttributeType.TEXT),
-    #     ],
-    # )
-
-    # tf7_output = Set(
-    #     "oTrainingConfig",
-    #     SetType.OUTPUT,
-    #     [
-    #         Attribute("server_round", AttributeType.NUMERIC),
-    #         Attribute("dynamically_adjusted", AttributeType.TEXT),
-    #     ],
-    # )
-
-    # tf1_output.set_type(SetType.INPUT)
-    # tf1_output.dependency = tf1._tag
-
-    # tf2_output.set_type(SetType.INPUT)
-    # tf2_output.dependency = tf2._tag
-
-    # tf7.set_sets([tf1_output, tf2_output, tf7_input, tf7_output])
-
-    # df.add_transformation(tf7)
-
-    # tf8 = Transformation("ClientTraining")
-
-    # tf8_output = Set(
-    #     "oClientTraining",
-    #     SetType.OUTPUT,
-    #     [
-    #         Attribute("client_id", AttributeType.NUMERIC),
-    #         Attribute("server_round", AttributeType.NUMERIC),
-    #         Attribute("training_time", AttributeType.NUMERIC),
-    #         Attribute("size_x_train", AttributeType.NUMERIC),
-    #         Attribute("accuracy", AttributeType.NUMERIC),
-    #         Attribute("loss", AttributeType.NUMERIC),
-    #         Attribute("val_loss", AttributeType.NUMERIC),
-    #         Attribute("val_accuracy", AttributeType.TEXT),
-    #         Attribute("local_weights", AttributeType.TEXT),
-    #         Attribute("starting_time", AttributeType.TEXT),
-    #         Attribute("ending_time", AttributeType.TEXT),
-    #     ],
-    # )
-
-    # tf3_output.set_type(SetType.INPUT)
-    # tf3_output.dependency = tf3._tag
-
-    # tf4_output.set_type(SetType.INPUT)
-    # tf4_output.dependency = tf4._tag
-
-    # tf5_output.set_type(SetType.INPUT)
-    # tf5_output.dependency = tf5._tag
-
-    # tf6_output.set_type(SetType.INPUT)
-    # tf6_output.dependency = tf6._tag
-
-    # tf7_output.set_type(SetType.INPUT)
-    # tf7_output.dependency = tf7._tag
-
-    # tf8.set_sets(
-    #     [
-    #         tf3_output,
-    #         tf4_output,
-    #         tf5_output,
-    #         tf6_output,
-    #         tf7_output,
-    #         tf8_output,
-    #     ]
-    # )
-    # df.add_transformation(tf8)
-
-    # tf9 = Transformation("ServerTrainingAggregation")
-    # tf9_output = Set(
-    #     "oServerTrainingAggregation",
-    #     SetType.OUTPUT,
-    #     [
-    #         Attribute("server_id", AttributeType.NUMERIC),
-    #         Attribute("server_round", AttributeType.NUMERIC),
-    #         Attribute("total_num_clients", AttributeType.NUMERIC),
-    #         Attribute("total_num_examples", AttributeType.NUMERIC),
-    #         Attribute("accuracy", AttributeType.NUMERIC),
-    #         Attribute("loss", AttributeType.NUMERIC),
-    #         Attribute("val_accuracy", AttributeType.NUMERIC),
-    #         Attribute("val_loss", AttributeType.NUMERIC),
-    #         Attribute("weights_mongo_id", AttributeType.TEXT),
-    #         Attribute("training_time", AttributeType.NUMERIC),
-    #         Attribute("starting_time", AttributeType.TEXT),
-    #         Attribute("ending_time", AttributeType.TEXT),
-    #     ],
-    # )
-
-    # tf8_output.set_type(SetType.INPUT)
-    # tf8_output.dependency = tf8._tag
-
-    # tf9.set_sets([tf8_output, tf9_output])
-    # df.add_transformation(tf9)
-
-    # tf10 = Transformation("EvaluationConfig")
-    # tf10_input = Set(
-    #     "iEvaluationConfig",
-    #     SetType.INPUT,
-    #     [
-    #         Attribute("batch_size", AttributeType.NUMERIC),
-    #         Attribute("steps", AttributeType.TEXT),
-    #     ],
-    # )
-
-    # tf10_output = Set(
-    #     "oEvaluationConfig",
-    #     SetType.OUTPUT,
-    #     [],
-    # )
-
-    # tf9_output.set_type(SetType.INPUT)
-    # tf9_output.dependency = tf9._tag
-
-    # tf10.set_sets([tf9_output, tf10_input, tf10_output])
-    # df.add_transformation(tf10)
-
-    # tf11 = Transformation("ClientEvaluation")
-
-    # tf11_output = Set(
-    #     "oClientEvaluation",
-    #     SetType.OUTPUT,
-    #     [
-    #         Attribute("client_id", AttributeType.NUMERIC),
-    #         Attribute("server_round", AttributeType.NUMERIC),
-    #         Attribute("loss", AttributeType.NUMERIC),
-    #         Attribute("evaluation_time", AttributeType.NUMERIC),
-    #         Attribute("accuracy", AttributeType.NUMERIC),
-    #         Attribute("num_testing_examples", AttributeType.NUMERIC),
-    #         Attribute("starting_time", AttributeType.TEXT),
-    #         Attribute("ending_time", AttributeType.TEXT),
-    #     ],
-    # )
-
-    # tf10_output.set_type(SetType.INPUT)
-    # tf10_output.dependency = tf10._tag
-
-    # tf11.set_sets([tf10_output, tf11_output])
-    # df.add_transformation(tf11)
-
-    # tf12 = Transformation("ServerEvaluationAggregation")
-
-    # tf12_output = Set(
-    #     "oServerEvaluationAggregation",
-    #     SetType.OUTPUT,
-    #     [
-    #         Attribute("server_id", AttributeType.NUMERIC),
-    #         Attribute("server_round", AttributeType.NUMERIC),
-    #         Attribute("total_num_clients", AttributeType.NUMERIC),
-    #         Attribute("total_num_examples", AttributeType.NUMERIC),
-    #         Attribute("accuracy", AttributeType.NUMERIC),
-    #         Attribute("loss", AttributeType.NUMERIC),
-    #         Attribute("evaluation_time", AttributeType.NUMERIC),
-    #         Attribute("starting_time", AttributeType.TEXT),
-    #         Attribute("ending_time", AttributeType.TEXT),
-    #     ],
-    # )
-
-    # tf11_output.set_type(SetType.INPUT)
-    # tf11_output.dependency = tf11._tag
-
-    # tf12.set_sets([tf11_output, tf12_output])
-    # df.add_transformation(tf12)
-
-    # tf12_output.set_type(SetType.INPUT)
-    # tf12_output.dependency = tf12._tag
-
-    # tf7 = Transformation("TrainingConfig")
-
-    # tf7.set_sets([tf12_output])
-    # df.add_transformation(tf7)
-
-    # df.save()
-    # tries = 0
-    # while tries < 100:
-    #     try:
-    #         conn = pymonetdb.connect(
-    #             username="monetdb",
-    #             password="monetdb",
-    #             hostname="localhost",
-    #             port="50000",
-    #             database="dataflow_analyzer",
-    #         )
-    #         cursor = conn.cursor()
-    #         cursor.execute(
-    #             """
-    #         CREATE OR REPLACE FUNCTION check_metrics (fl_round int)
-    #         RETURNS table (training_time double, accuracy_training double, loss_training double, 
-    #             val_accuracy double, val_loss double, accuracy_evaluation double, loss_evaluation double)
-    #         BEGIN
-    #             RETURN
-    #             SELECT
-    #                 st.training_time,
-    #                 st.accuracy,
-    #                 st.loss,
-    #                 st.val_accuracy,
-    #                 st.val_loss,
-    #                 se.accuracy,
-    #                 se.loss
-    #             FROM
-    #                 oservertrainingaggregation as st
-    #             JOIN 
-    #                 oserverevaluationaggregation as se
-    #             ON
-    #                 st.server_round = se.server_round
-    #             WHERE
-    #                 st.server_round = fl_round;
-    #         END;"""
-    #         )
-
-    #         cursor.execute(
-    #             """CREATE OR REPLACE FUNCTION update_hyperparameters (accuracy_goal double,
-    #         limit_training_time double,
-    #         limit_accuracy_change double,
-    #         fl_round int)
-    #         RETURNS boolean
-    #         BEGIN
-    #             RETURN
-    #             SELECT 
-    #                 CASE WHEN (SELECT DISTINCT dynamically_adjusted FROM otrainingconfig
-    #                     WHERE server_round BETWEEN fl_round - 2 AND fl_round - 1 AND dynamically_adjusted = 'True') IS NOT NULL THEN 0
-    #                     WHEN (SELECT DISTINCT
-    #                     CASE
-    #                         WHEN (last_value(accuracy_training) OVER () < accuracy_goal
-    #                         AND last_value(training_time) OVER () < limit_training_time*60 
-    #                         AND (last_value(accuracy_training) OVER () > first_value(accuracy_training) OVER ()
-    #                         AND last_value(val_accuracy) OVER () > first_value(val_accuracy) OVER ())
-    #                         AND last_value(accuracy_training) OVER () - first_value(accuracy_training) OVER () < limit_accuracy_change)
-    #                         THEN 1
-    #                         ELSE 0
-    #                     END
-    #                     FROM
-    #                         (
-    #                         SELECT * FROM check_metrics(fl_round - 2)
-    #                         UNION 
-    #                         SELECT * FROM check_metrics(fl_round - 1)) AS t1) THEN 1
-    #                 ELSE 0
-    #             END;
-    #         END;"""
-    #         )
-
-    #         cursor.execute(
-    #             """
-    #         CREATE OR REPLACE FUNCTION check_last_round_fl (server_id int)
-    #         RETURNS int
-    #         BEGIN
-    #             RETURN
-    #             SELECT
-    #                 MAX(server_round)
-    #             FROM
-    #                 oservertrainingaggregation as st
-    #             WHERE st.server_id = server_id;
-    #         END;"""
-    #         )
-
-    #         cursor.execute(
-    #             """
-    #         CREATE OR REPLACE FUNCTION get_num_rounds (server_id int)
-    #         RETURNS int
-    #         BEGIN
-    #             RETURN
-    #             SELECT
-    #                 num_rounds
-    #             FROM 
-    #                 iServerConfig as sc
-    #             WHERE sc.server_id = server_id ;
-    #         END;"""
-    #         )
-
-    #         cursor.execute(
-    #             """
-    #         CREATE OR REPLACE FUNCTION check_ending_fl (server_id int)
-    #         RETURNS bool
-    #         BEGIN
-    #             RETURN
-    #             SELECT
-    #                 check_last_round_fl(server_id) = get_num_rounds(server_id);
-    #         END;"""
-    #         )
-
-
-    #         conn.commit()
-    #         cursor.close()
-    #         conn.close()
-    #         break
-    #     except Exception as e:
-    #         time.sleep(1)
-    #         tries += 1
-
-    ##########
     # Parse Flower Server Arguments.
     ag = ArgumentParser(description="Flower Server Arguments")
-    ag.add_argument(
-        "--server_id", type=int, required=True, help="Server ID (no default)"
-    )
+    ag.add_argument("--server_id", type=int, required=True, help="Server ID (no default)")
     ag.add_argument(
         "--server_config_file",
         type=Path,
@@ -1541,7 +1062,9 @@ def main() -> None:
     logger = fs.load_logger()
     fs.set_attribute("logger", logger)
     # Load and Set Initial Global Model Parameters.
+
     initial_global_model_parameters = fs.load_initial_global_model_parameters()
+
     fs.set_attribute("initial_global_model_parameters", initial_global_model_parameters)
     # Load and Set Initial Fit Config.
     fit_config = fs.load_initial_fit_config()
