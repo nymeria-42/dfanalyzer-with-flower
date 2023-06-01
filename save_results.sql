@@ -38,12 +38,19 @@ INTO 'metrics_results.csv' ON CLIENT USING DELIMITERS ',', '\n', '"';
 
 COPY (
     SELECT
-        *
+        ilw.server_id, ilw.starting_time, ilw.loading_time, olw.loaded_from_mongo, sc.address, sc.num_rounds
     FROM
-        iloadglobalparemeters as ilgp
+        iloadglobalweights as ilw
     JOIN 
-        Oloadglobalparemeters as olgp
+        oloadglobalweights as olw
         ON ilgp.id = olgp.id 
     JOIN iserverconfig as sc
-        on sc.id_server = ilgp.id_server)
+        on sc.server_id = ilgp.server_id)
 INTO 'load_weights.csv' ON CLIENT USING DELIMITERS ',', '\n', '"';
+
+COPY (
+    SELECT
+        server_id, server_round, weights_mongo_id, insertion_time
+    FROM
+        oservertrainingaggregation)
+INTO 'insert_weights.csv' ON CLIENT USING DELIMITERS ',', '\n', '"';
