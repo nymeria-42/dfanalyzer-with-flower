@@ -35,3 +35,15 @@ COPY (
         oserverevaluationaggregation as se
         ON st.server_round = se.server_round )
 INTO 'metrics_results.csv' ON CLIENT USING DELIMITERS ',', '\n', '"';
+
+COPY (
+    SELECT
+        *
+    FROM
+        iloadglobalparemeters as ilgp
+    JOIN 
+        Oloadglobalparemeters as olgp
+        ON ilgp.id = olgp.id 
+    JOIN iserverconfig as sc
+        on sc.id_server = ilgp.id_server)
+INTO 'load_weights.csv' ON CLIENT USING DELIMITERS ',', '\n', '"';
