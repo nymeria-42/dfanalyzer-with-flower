@@ -355,7 +355,7 @@ class FlowerServer:
 
         starting_time = time.ctime()
         loading_parameters_start = perf_counter()
-        t2 = Task(2, dataflow_tag, "LoadGlobalParameters")
+        t2 = Task(2, dataflow_tag, "LoadGlobalWeights")
         t2.begin()
 
         params = None
@@ -383,11 +383,11 @@ class FlowerServer:
         ending_time = time.ctime()
         loading_parameters_end = perf_counter() - loading_parameters_start
 
-        to_dfanalyzer = [starting_time, ending_time, loading_parameters_end]
-        t2_input = DataSet("iLoadGlobalParameters", [Element(to_dfanalyzer)])
+        to_dfanalyzer = [self.get_attribute("server_id"), starting_time, ending_time, loading_parameters_end]
+        t2_input = DataSet("iLoadGlobalWeights", [Element(to_dfanalyzer)])
         t2.add_dataset(t2_input)
         to_dfanalyzer = [bool(params)]
-        t2_output = DataSet("oLoadGlobalParameters", [Element([to_dfanalyzer])])
+        t2_output = DataSet("oLoadGlobalWeights", [Element(to_dfanalyzer)])
         t2.add_dataset(t2_output)
         t2.end()
 
@@ -657,7 +657,7 @@ class FlowerServer:
                 Dependency(
                     [
                         "serverconfig",
-                        "loadglobalparameters",
+                        "loadglobalweights",
                         "strategy",
                         "serverevaluationaggregation",
                     ],
@@ -669,7 +669,7 @@ class FlowerServer:
                 Dependency(
                     [
                         "serverconfig",
-                        "loadglobalparameters",
+                        "loadglobalweights",
                         "strategy",
                         "serverevaluationaggregation",
                     ],

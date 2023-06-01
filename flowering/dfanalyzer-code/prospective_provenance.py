@@ -42,18 +42,21 @@ tf1_output = Set("oServerConfig", SetType.OUTPUT, [])
 tf1.set_sets([tf1_input, tf1_output])
 df.add_transformation(tf1)
 
-tf2 = Transformation("LoadGlobalParameters")
+tf2 = Transformation("LoadGlobalWeights")
 
 tf2_input = Set(
-    "iLoadGlobalParameters",
+    "iLoadGlobalWeights",
     SetType.INPUT,
     [
+        Attribute("server_id", AttributeType.NUMERIC),
         Attribute("starting_time", AttributeType.TEXT),
         Attribute("ending_time", AttributeType.TEXT),
         Attribute("loading_time", AttributeType.TEXT),
     ],
 )
-tf2_output = Set("oLoadGlobalParameters", SetType.OUTPUT, [])
+tf2_output = Set("oLoadGlobalWeights", SetType.OUTPUT, [
+    Attribute("loaded_from_mongo", AttributeType.TEXT),
+])
 tf2.set_sets([tf2_input, tf2_output])
 df.add_transformation(tf2)
 
