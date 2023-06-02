@@ -25,8 +25,6 @@ from dfa_lib_python.extractor_extension import ExtractorExtension
 from dfa_lib_python.dependency import Dependency
 import time
 
-
-import pymonetdb
 from pymongo import MongoClient
 from bson.binary import Binary
 import pickle

@@ -12,6 +12,27 @@ from dfa_lib_python.extractor_extension import ExtractorExtension
 from dfa_lib_python.dependency import Dependency
 import time
 import pymonetdb
+from argparse import ArgumentParser
+from configparser import ConfigParser
+from pathlib import Path
+
+
+ag = ArgumentParser(description="Flower Server Arguments")
+
+ag.add_argument(
+        "--server_config_file",
+        type=Path,
+        required=False,
+        default="config/flower_server.cfg",
+        help="Server Config File (no default)",
+        dest="server_config_file"
+    )
+
+parsed_args = ag.parse_args()
+cp = ConfigParser()
+cp.optionxform = str
+cp.read(filenames=parsed_args.server_config_file, encoding="utf-8")
+monetdb_settings =  cp["MonetDB Settings"]
 
 # DfAnalyzer Instrumentation
 dataflow_tag = "flower-df"
@@ -359,11 +380,11 @@ tries = 0
 while tries < 100:
     try:
         conn = pymonetdb.connect(
-            username="monetdb",
-            password="monetdb",
-            hostname="localhost",
-            port="50000",
-            database="dataflow_analyzer",
+            hostname=monetdb_settings["hostname"],
+            port=monetdb_settings["port"],
+            username=monetdb_settings["username"],
+            password=monetdb_settings["password"],
+            database=monetdb_settings["database"]
         )
         cursor = conn.cursor()
         cursor.execute(
