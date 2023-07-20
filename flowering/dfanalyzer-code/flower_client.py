@@ -11,6 +11,8 @@ from time import perf_counter
 from typing import Any, Optional, Tuple
 from os import environ
 
+from pymonetdb import connect
+
 environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 from keras.applications import MobileNetV2
@@ -84,14 +86,64 @@ class Client(NumPyClient):
         return self.model.get_weights()
 
     def get_connection_mongodb(self, host, port):
-        client = MongoClient(host=host, port=port)
+        client = MongoClient(host=host, port=int(port))
         return client.flowerprov
 
     def fit(
         self, global_model_current_parameters: NDArrays, fit_config: dict
     ) -> Tuple[NDArrays, int, dict]:
         # Update the Local Model With the Global Model's Current Parameters (Weights).
+        monetdb_settings = { k.replace("monetdb_",""): v for k, v in fit_config.items() if 'monetdb' in k}
+        mongodb_settings = { k.replace("mongodb_",""): v for k, v in fit_config.items() if 'mongodb' in k}        
+        fit_config = {k: (None if v == "None" else v) for k, v in fit_config.items() if 'monetdb' not in k and 'mongodb' not in k}
         self.model.set_weights(global_model_current_parameters)
+
+        if fit_config["fl_round"] > 1 and fit_config["action"] == 'different_models':
+
+            connection = connect(
+                hostname=monetdb_settings["hostname"],
+                port=monetdb_settings["port"],
+                username=monetdb_settings["username"],
+                password=monetdb_settings["password"],
+                database=monetdb_settings["database"],
+            )
+
+            cursor = connection.cursor()
+
+            result = None
+            tries = 0
+            fl_round = fit_config["fl_round"]
+            server_id = fit_config["server_id"]
+            while tries < 50 and not result:
+                query = f"""SELECT get_clients_number_round({server_id},{fl_round})"""
+                cursor.execute(operation=query)
+                connection.commit()
+                result = cursor.fetchone()
+
+                if result:
+                    result = bool(result)
+                tries += 1
+                time.sleep(0.05)
+
+            if result:
+                query = f"""SELECT get_client_last_round({server_id}, {self.client_id})"""
+                cursor.execute(operation=query)
+                last_round = int(cursor.fetchone()[0])
+                cursor.close()
+                connection.close()
+                if fit_config["fl_round"] != (last_round+1):
+
+                    db = self.get_connection_mongodb(mongodb_settings["hostname"], mongodb_settings["port"])
+                    pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"server_id": {"$eq": server_id}}]})
+                    params = pickle.loads(pesos["global_weights"])
+                    if params: 
+                        message = f"Loading client {self.client_id} with global weights from round {last_round}"
+                        self.log_message(message, "INFO")
+                        self.model.set_weights(params)
+                    else:
+                        message = f"Couldn't find valid checkpoint for round {fit_config['fl_round']}"
+                        self.log_message(message, "INFO")
+                        last_round = None
 
         t8 = Task(9 + 6 * (fit_config["fl_round"] - 1), dataflow_tag, "ClientTraining")
         t8.add_dependency(
@@ -110,7 +162,6 @@ class Client(NumPyClient):
         t8.begin()
 
         # Replace All "None" String Values with None Type (Necessary Workaround on Flower v1.1.0).
-        fit_config = {k: (None if v == "None" else v) for k, v in fit_config.items()}
         # Log the Training Configuration Received from the Server (If Logger is Enabled for "DEBUG" Level).
         message = "[Client {0} | FL Round {1}] Fit Config: {2}".format(
             self.client_id, fit_config["fl_round"], fit_config
@@ -161,16 +212,17 @@ class Client(NumPyClient):
         # Add the Fit Time to the Training Metrics.
         training_metrics.update({"fit_time": fit_time_end})
 
-        local_weights = {
-            "round": fit_config["fl_round"],
-            "client": self.client_id,
-            "local_weights": Binary(pickle.dumps(weight_tensors_list, protocol=2)),
-        }
+        # local_weights = {
+        #     "round": fit_config["fl_round"],
+        #     "client": self.client_id,
+        #     "local_weights": Binary(pickle.dumps(weight_tensors_list, protocol=2)),
+        # }
         # db = self.get_connection_mongodb("localhost", 27017)
         # _id = db.local_weights.insert_one(local_weights)
 
         to_dfanalyzer = [
             self.client_id,
+            fit_config["server_id"],
             fit_config["fl_round"],
             fit_time_end,
             len(self.x_train),
@@ -254,6 +306,7 @@ class Client(NumPyClient):
 
         to_dfanalyzer = [
             self.client_id,
+            evaluate_config["server_id"],
             evaluate_config["fl_round"],
             testing_metrics["loss"],
             evaluate_time_end,

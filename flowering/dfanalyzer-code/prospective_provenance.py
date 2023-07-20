@@ -231,6 +231,7 @@ tf9_output = Set(
     SetType.OUTPUT,
     [
         Attribute("client_id", AttributeType.NUMERIC),
+        Attribute("server_id", AttributeType.NUMERIC),
         Attribute("server_round", AttributeType.NUMERIC),
         Attribute("training_time", AttributeType.NUMERIC),
         Attribute("size_x_train", AttributeType.NUMERIC),
@@ -279,6 +280,7 @@ tf10_output = Set(
         Attribute("server_id", AttributeType.NUMERIC),
         Attribute("server_round", AttributeType.NUMERIC),
         Attribute("total_num_clients", AttributeType.NUMERIC),
+        Attribute("client_loss", AttributeType.TEXT),
         Attribute("total_num_examples", AttributeType.NUMERIC),
         Attribute("accuracy", AttributeType.NUMERIC),
         Attribute("loss", AttributeType.NUMERIC),
@@ -327,6 +329,7 @@ tf12_output = Set(
     SetType.OUTPUT,
     [
         Attribute("client_id", AttributeType.NUMERIC),
+        Attribute("server_id", AttributeType.NUMERIC),
         Attribute("server_round", AttributeType.NUMERIC),
         Attribute("loss", AttributeType.NUMERIC),
         Attribute("evaluation_time", AttributeType.NUMERIC),
@@ -394,7 +397,7 @@ while tries < 100:
             val_accuracy double, val_loss double, accuracy_evaluation double, loss_evaluation double)
         BEGIN
             RETURN
-            SELECT
+            (SELECT
                 st.training_time,
                 st.accuracy,
                 st.loss,
@@ -409,7 +412,7 @@ while tries < 100:
             ON
                 st.server_round = se.server_round
             WHERE
-                st.server_round = fl_round;
+                st.server_round = fl_round);
         END;"""
         )
 
@@ -421,7 +424,7 @@ while tries < 100:
         RETURNS boolean
         BEGIN
             RETURN
-            SELECT 
+            (SELECT 
                 CASE WHEN (SELECT DISTINCT dynamically_adjusted FROM otrainingconfig
                     WHERE server_round BETWEEN fl_round - 2 AND fl_round - 1 AND dynamically_adjusted = 'True') IS NOT NULL THEN 0
                     WHEN (SELECT DISTINCT
@@ -440,46 +443,46 @@ while tries < 100:
                         UNION 
                         SELECT * FROM check_metrics(fl_round - 1)) AS t1) THEN 1
                 ELSE 0
-            END;
+            END);
         END;"""
         )
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION check_last_round_fl (server_id int)
+        CREATE OR REPLACE FUNCTION check_last_round_fl (_server_id int)
         RETURNS int
         BEGIN
             RETURN
-            SELECT
-                MAX(server_round)
+            (SELECT
+                MAX(st.server_round)
             FROM
-                oservertrainingaggregation as st
-            WHERE st.server_id = server_id;
+                oservertrainingaggregation st
+            WHERE st.server_id = _server_id);
         END;"""
         )
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION get_num_rounds (server_id int)
-        RETURNS int
-        BEGIN
-            RETURN
-            SELECT
-                MIN(num_rounds)
-            FROM 
-                iServerConfig as sc
-            WHERE sc.server_id = server_id;
-        END;"""
+            CREATE OR REPLACE FUNCTION get_num_rounds (_server_id int)
+            RETURNS int
+            BEGIN
+                RETURN
+                (SELECT
+                    num_rounds
+                FROM 
+                    iServerConfig as sc
+                WHERE sc.server_id = _server_id);
+            END;"""
         )
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION check_ending_fl (server_id int)
+        CREATE OR REPLACE FUNCTION check_ending_fl (_server_id int)
         RETURNS bool
         BEGIN
             RETURN
-            SELECT
-                check_last_round_fl(server_id) = get_num_rounds(server_id);
+            (SELECT
+                check_last_round_fl(_server_id) = get_num_rounds(_server_id));
         END;"""
         )
 
@@ -489,10 +492,97 @@ while tries < 100:
         RETURNS int
         BEGIN
             RETURN
-            SELECT
+            (SELECT
                 MAX(server_id)
             FROM 
-                iServerConfig as sc;
+                iServerConfig as sc);
+        END;"""
+        )
+
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION get_initial_clients_number (_server_id int)
+        RETURNS int
+        BEGIN
+            RETURN
+            (SELECT
+                COUNT(client_id)
+            FROM 
+                oClientTraining ct
+            WHERE ct.server_round = 1
+            AND ct.server_id = _server_id);
+        END;"""
+        )
+
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION get_clients_number_round (_server_id int, _server_round int)
+        RETURNS int
+        BEGIN
+            RETURN
+            (SELECT
+                COUNT(ct.client_id)
+            FROM 
+                oClientTraining ct
+            WHERE ct.server_round = _server_round
+                AND ct.server_id = _server_id);
+        END;"""
+        )
+
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION check_lost_client (_server_id int, _server_round int)
+        RETURNS bool
+        BEGIN
+            RETURN
+            (SELECT
+                get_clients_number_round(_server_id, _server_round) <> get_initial_clients_number(_server_id));
+        END;"""
+        )
+
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION get_client_last_round (_server_id int, client_id int)
+        RETURNS int
+        BEGIN
+            RETURN
+            (SELECT
+                MAX(server_round)
+            FROM 
+                oClientTraining ct
+            WHERE ct.client_id = client_id
+                AND ct.server_id=_server_id);
+        END;"""
+        )
+
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION get_last_round_with_all_clients (_server_id int)
+        RETURNS int
+        BEGIN
+            RETURN
+           ( SELECT
+                MAX(sta.server_round)
+            FROM 
+               oservertrainingaggregation sta
+            WHERE sta.server_id=_server_id 
+            AND sta.client_loss <> false);
+        END;"""
+        )
+
+
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION check_if_last_round_is_already_recorded(_server_id int, _server_round int) 
+        RETURNS int 
+        BEGIN 
+            RETURN
+                (SELECT 
+                    COUNT(se.accuracy) 
+                FROM 
+                    oserverevaluationaggregation  se
+                WHERE se.server_round = ( _server_round - 1 )
+                    AND se.server_id = _server_id);
         END;"""
         )
 

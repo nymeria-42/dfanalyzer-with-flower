@@ -18,7 +18,6 @@ from keras.metrics import SparseCategoricalAccuracy
 from keras.models import Model
 from keras.optimizers import Optimizer, SGD
 
-
 class Client(NumPyClient):
 
     def __init__(self,
@@ -58,8 +57,7 @@ class Client(NumPyClient):
         # TODO: To Implement (If Ever Needed)...
         pass
 
-    def get_parameters(self,
-                       config: dict) -> NDArrays:
+    def get_parameters(self) -> NDArrays:
         # Return the Local Model's Current Parameters (Weights).
         return self.model.get_weights()
 
@@ -100,7 +98,7 @@ class Client(NumPyClient):
                     fit_time_end)
         self.log_message(message, "INFO")
         # Get the Local Model's Current Parameters (Weights).
-        weight_tensors_list = self.get_parameters(fit_config)
+        weight_tensors_list = self.get_parameters()
         # Get the Number of Training Examples Used.
         num_training_examples = len(self.x_train)
         # Get the Last Epoch's Training Metrics.

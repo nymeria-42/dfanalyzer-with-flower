@@ -136,6 +136,9 @@ class FlowerServer:
         # Parse 'FL Settings' and Set Attributes.
         fl_settings = self.parse_config_section(cp, "FL Settings")
 
+        checkpoints_settings = cp["Checkpoints Settings"]
+        self.set_attribute("checkpoints_settings", checkpoints_settings)
+
         monetdb_settings = cp["MonetDB Settings"]
         self.set_attribute("monetdb_settings", monetdb_settings)
 
@@ -375,7 +378,7 @@ class FlowerServer:
                 conn.close()
 
                 db = self.get_connection_mongodb()
-                pesos = db.checkpoints.find_one({"round": {"$eq": last_round}})
+                pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"server_id": {"$eq": self.server_id - 1}}]})
                 params = pickle.loads(pesos["global_weights"])
 
         ending_time = time.ctime()
@@ -438,7 +441,59 @@ class FlowerServer:
         \nRequires a server-side dataset to evaluate the newly aggregated model without sending it to the Clients.
         \nThe 'losses_centralized' and 'metrics_centralized' will only contain values using this centralized evaluation.
         \nAlternative: Client-side (Federated) evaluation."""
+        if fl_round > 1 and self.checkpoints_settings["action"]=="rollback":
+            monetdb_settings = self.get_attribute("monetdb_settings")
 
+            connection = connect(
+                hostname=monetdb_settings["hostname"],
+                port=monetdb_settings["port"],
+                username=monetdb_settings["username"],
+                password=monetdb_settings["password"],
+                database=monetdb_settings["database"],
+            )
+
+            cursor = connection.cursor()
+
+            result = None
+            tries = 0
+            fl_round = self.get_attribute("fl_round")
+            while tries < 100 and not result:
+                query = f"""SELECT check_if_last_round_is_already_recorded({self.server_id},{fl_round})"""
+                cursor.execute(operation=query)
+                connection.commit()
+                result = cursor.fetchone()
+
+                if result:
+                    result = result[-1]
+                tries += 1
+                time.sleep(0.05)
+
+            if result:
+                query = f"""SELECT get_last_round_with_all_clients({self.server_id})"""
+                cursor.execute(operation=query)
+                last_round = int(cursor.fetchone()[0])
+                cursor.close()
+                connection.close()
+                if self.fl_round != (last_round):
+
+                    db = self.get_connection_mongodb()
+                    pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"server_id": {"$eq": self.server_id}}]})
+                    params = pickle.loads(pesos["global_weights"])
+                    if params: 
+                        message = f"ROLLBACK! Using weights from round {last_round} in round {self.fl_round+1}"
+                        self.log_message(message, "INFO")
+                        self.set_attribute(
+                            "global_model_parameters",
+                            params,
+                        )
+                        return None
+
+                    else:
+                        message = f"Couldn't find valid checkpoint for round {self.fl_round}"
+                        self.log_message(message, "INFO")
+                        last_round = None
+
+        
         self.set_attribute(
             "global_model_parameters",
             global_model_parameters,
@@ -500,10 +555,8 @@ class FlowerServer:
         tries = 0
         fl_round = self.get_attribute("fl_round")
         while tries < 100 and not result:
-            cursor.execute(
-                monetdb_settings["check_if_last_round_is_already_recorded"].format(fl_round)
-            )
-            connection.commit()
+            query = f"""SELECT check_if_last_round_is_already_recorded({self.server_id},{fl_round})"""
+            cursor.execute(operation=query)
             result = cursor.fetchone()
 
             if result:
@@ -704,6 +757,19 @@ class FlowerServer:
         t8.add_dataset(t8_output)
         t8.end()
 
+        mongodb = {"hostname": self.mongodb_settings["hostname"],
+            "port": self.mongodb_settings["port"],
+            }
+        
+        monetdb = {"hostname": self.monetdb_settings["hostname"],
+            "port": self.monetdb_settings["port"],
+            "username": self.monetdb_settings["username"],
+            "password": self.monetdb_settings["password"],
+            "database": self.monetdb_settings["database"]}
+        
+        fit_config.update({'action': self.checkpoints_settings["action"], "server_id": self.get_attribute("server_id"), "monetdb_hostname": monetdb["hostname"],
+                           "monetdb_port": monetdb["port"], "monetdb_username": monetdb["username"], "monetdb_password": monetdb["password"], "monetdb_database": monetdb["database"],
+                           "mongodb_hostname": mongodb["hostname"], "mongodb_port": mongodb["port"]})
         # Return the Training Configuration to be Sent to All Participating Clients.
         return fit_config
 
@@ -719,7 +785,7 @@ class FlowerServer:
         # Get the Testing Configuration.
         evaluate_config = self.get_attribute("evaluate_config")
         # Update the Testing Configuration's Current FL Round.
-        evaluate_config.update({"fl_round": self.get_attribute("fl_round")})
+        evaluate_config.update({"fl_round": self.get_attribute("fl_round"), "server_id": self.get_attribute("server_id")})
         # Dynamically Adjust the Testing Configuration's Hyper-parameters (If Enabled and Eligible).
         if self.is_enabled_hyper_parameters_dynamic_adjustment("test"):
             if self.is_fl_round_eligible_for_hyper_parameters_dynamic_adjustment("test"):
@@ -808,6 +874,45 @@ class FlowerServer:
         )
         self.log_message(message, "INFO")
 
+
+        
+        ### Check client loss
+        monetdb_settings = self.get_attribute("monetdb_settings")
+
+        connection = connect(
+            hostname=monetdb_settings["hostname"],
+            port=monetdb_settings["port"],
+            username=monetdb_settings["username"],
+            password=monetdb_settings["password"],
+            database=monetdb_settings["database"],
+        )
+
+        cursor = connection.cursor()
+
+        result = None
+        tries = 0
+        fl_round = self.get_attribute("fl_round")
+        while tries < 100 and not result:
+            query = f"""SELECT check_if_last_round_is_already_recorded({self.server_id},{fl_round})"""
+            cursor.execute(operation=query)
+            result = cursor.fetchone()
+
+            if result:
+                result = result[-1]
+            tries += 1
+            time.sleep(0.05)
+
+        if result:
+            query = f"""SELECT check_lost_client({self.server_id}, {fl_round})"""
+            cursor.execute(operation=query)
+            lost_client = bool(cursor.fetchone()[0])
+        else:
+            lost_client = False
+        cursor.close()
+        connection.close()
+
+
+
         checkpoints = {
             "round": self.get_attribute("fl_round"),
             "server": self.get_attribute("server_id"),
@@ -822,6 +927,7 @@ class FlowerServer:
             self.get_attribute("server_id"),
             self.get_attribute("fl_round"),
             total_num_clients,
+            lost_client,
             total_num_examples,
             aggregated_metrics["sparse_categorical_accuracy"],
             aggregated_metrics["loss"],
