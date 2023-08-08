@@ -115,13 +115,13 @@ class Client(NumPyClient):
             fl_round = fit_config["fl_round"]
             server_id = fit_config["server_id"]
             while tries < 50 and not result:
-                query = f"""SELECT get_clients_number_round({server_id},{fl_round})"""
+                query = f"""SELECT check_if_last_round_is_already_recorded({server_id},{fl_round})"""
                 cursor.execute(operation=query)
                 connection.commit()
                 result = cursor.fetchone()
 
                 if result:
-                    result = bool(result)
+                    result = result[-1]
                 tries += 1
                 time.sleep(0.05)
 

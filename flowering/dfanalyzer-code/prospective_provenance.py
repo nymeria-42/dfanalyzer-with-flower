@@ -463,6 +463,20 @@ while tries < 100:
 
         cursor.execute(
             """
+        CREATE OR REPLACE FUNCTION check_last_round_fl_client_loss (_server_id int, _client_loss bool)
+        RETURNS int
+        BEGIN
+            RETURN
+            (SELECT
+                MAX(st.server_round)
+            FROM
+                oservertrainingaggregation st
+            WHERE st.server_id = _server_id AND st.client_loss=_client_loss);
+        END;"""
+        )
+
+        cursor.execute(
+            """
             CREATE OR REPLACE FUNCTION get_num_rounds (_server_id int)
             RETURNS int
             BEGIN

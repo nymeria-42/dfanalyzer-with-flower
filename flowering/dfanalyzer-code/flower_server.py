@@ -173,7 +173,6 @@ class FlowerServer:
 
         if ending_fl == False:
             cursor.execute(f"SELECT check_last_round_fl({self.server_id - 1});")
-
             conn.commit()
             last_round = cursor.fetchone()[0]
 
@@ -368,7 +367,7 @@ class FlowerServer:
             ending_fl = cursor.fetchone()[0]
 
             if ending_fl == False:
-
+                if ldfksl 
                 cursor.execute(f"SELECT check_last_round_fl({self.server_id-1});")
 
                 conn.commit()
@@ -474,24 +473,35 @@ class FlowerServer:
                 last_round = int(cursor.fetchone()[0])
                 cursor.close()
                 connection.close()
+
                 if self.fl_round != (last_round):
+                    query = f"""SELECT check_lost_client({self.server_id}, {self.fl_round})"""
+                    cursor.execute(operation=query)
+                    lost_client = bool(cursor.fetchone()[0])
+                    cursor.close()
+                    connection.close()
+                    
+                    if not lost_client:
 
-                    db = self.get_connection_mongodb()
-                    pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"server_id": {"$eq": self.server_id}}]})
-                    params = pickle.loads(pesos["global_weights"])
-                    if params: 
-                        message = f"ROLLBACK! Using weights from round {last_round} in round {self.fl_round+1}"
-                        self.log_message(message, "INFO")
-                        self.set_attribute(
-                            "global_model_parameters",
-                            params,
-                        )
-                        return None
+                        db = self.get_connection_mongodb()
+                        pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"server_id": {"$eq": self.server_id}}]})
+                        params = pickle.loads(pesos["global_weights"])
+                        if params: 
+                            message = f"ROLLBACK! Using weights from round {last_round} in round {self.fl_round}"
+                            self.log_message(message, "INFO")
+                            self.set_attribute(
+                                "global_model_parameters",
+                                params,
+                            )
+                            return None
 
+                        else:
+                            message = f"Couldn't find valid checkpoint for round {self.fl_round}"
+                            self.log_message(message, "INFO")
+                            last_round = None
                     else:
-                        message = f"Couldn't find valid checkpoint for round {self.fl_round}"
+                        message = f"Client missing in {self.fl_round}! Waiting return to execute rollback."
                         self.log_message(message, "INFO")
-                        last_round = None
 
         
         self.set_attribute(
