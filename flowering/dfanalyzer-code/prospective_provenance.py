@@ -379,7 +379,9 @@ tf8.set_sets([tf13_output])
 df.add_transformation(tf8)
 
 df.save()
+
 tries = 0
+
 while tries < 100:
     try:
         conn = pymonetdb.connect(
@@ -389,6 +391,7 @@ while tries < 100:
             password=monetdb_settings["password"],
             database=monetdb_settings["database"]
         )
+
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -556,7 +559,7 @@ while tries < 100:
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION get_client_last_round (_server_id int, client_id int)
+        CREATE OR REPLACE FUNCTION get_client_last_round (_server_id int, _client_id int)
         RETURNS int
         BEGIN
             RETURN
@@ -564,7 +567,7 @@ while tries < 100:
                 MAX(server_round)
             FROM 
                 oClientTraining ct
-            WHERE ct.client_id = client_id
+            WHERE ct.client_id = _client_id
                 AND ct.server_id=_server_id);
         END;"""
         )

@@ -145,22 +145,6 @@ class Client(NumPyClient):
                         self.log_message(message, "INFO")
                         last_round = None
 
-        t8 = Task(9 + 6 * (fit_config["fl_round"] - 1), dataflow_tag, "ClientTraining")
-        t8.add_dependency(
-            Dependency(
-                [
-                    "datasetload",
-                    "modelconfig",
-                    "optimizerconfig",
-                    "lossconfig",
-                    "trainingconfig",
-                ],
-                ["4", "5", "6", "7", str(8 + 6 * (fit_config["fl_round"] - 1))],
-            )
-        )
-        starting_time = time.ctime()
-        t8.begin()
-
         # Replace All "None" String Values with None Type (Necessary Workaround on Flower v1.1.0).
         # Log the Training Configuration Received from the Server (If Logger is Enabled for "DEBUG" Level).
         message = "[Client {0} | FL Round {1}] Fit Config: {2}".format(
@@ -174,6 +158,8 @@ class Client(NumPyClient):
         self.log_message(message, "INFO")
         # Start the Fit Model Timer.
         fit_time_start = perf_counter()
+        starting_time = time.ctime()
+
         # Fit the Local Updated Model With the Local Training Dataset.
         training_metrics_history = self.model.fit(
             x=self.x_train,
@@ -212,6 +198,20 @@ class Client(NumPyClient):
         # Add the Fit Time to the Training Metrics.
         training_metrics.update({"fit_time": fit_time_end})
 
+        t8 = Task(9 + 6 * (fit_config["fl_round"] - 1), dataflow_tag, "ClientTraining")
+        t8.add_dependency(
+            Dependency(
+                [
+                    "datasetload",
+                    "modelconfig",
+                    "optimizerconfig",
+                    "lossconfig",
+                    "trainingconfig",
+                ],
+                ["4", "5", "6", "7", str(8 + 6 * (fit_config["fl_round"] - 1))],
+            )
+        )
+        t8.begin()
         # local_weights = {
         #     "round": fit_config["fl_round"],
         #     "client": self.client_id,
