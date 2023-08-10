@@ -367,7 +367,6 @@ class FlowerServer:
             ending_fl = cursor.fetchone()[0]
 
             if ending_fl == False:
-                if ldfksl 
                 cursor.execute(f"SELECT check_last_round_fl({self.server_id-1});")
 
                 conn.commit()
