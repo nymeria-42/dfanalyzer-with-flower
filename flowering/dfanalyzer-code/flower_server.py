@@ -924,7 +924,7 @@ class FlowerServer:
 
         checkpoints = {
             "round": self.get_attribute("fl_round"),
-            "server": self.get_attribute("server_id"),
+            "server_id": self.get_attribute("server_id"),
             "global_weights": Binary(pickle.dumps(self.global_model_parameters, protocol=4)),
         }
 

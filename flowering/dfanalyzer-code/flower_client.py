@@ -132,7 +132,6 @@ class Client(NumPyClient):
                 cursor.close()
                 connection.close()
                 if fit_config["fl_round"] != (last_round+1):
-
                     db = self.get_connection_mongodb(mongodb_settings["hostname"], mongodb_settings["port"])
                     pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"server_id": {"$eq": server_id}}]})
                     params = pickle.loads(pesos["global_weights"])
