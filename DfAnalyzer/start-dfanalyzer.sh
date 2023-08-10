@@ -45,7 +45,7 @@ lines=`cat $DB_CONFIG_FILE  | egrep -v "#"`
 for i in `echo $lines`; do 
   host=`echo $i`
   # echo "cd $SIMULATION_DIR;monetdbd start $DATAPATH;monetdbd get all $DATAPATH;monetdb start dataflow_analyzer;monetdb status"
-  cd $SIMULATION_DIR;monetdbd start $DATAPATH;monetdbd set listenaddr=0.0.0.0 $DATAPATH;monetdbd get all $DATAPATH;monetdb start dataflow_analyzer;monetdb status
+  cd $SIMULATION_DIR;;monetdbd set listenaddr=0.0.0.0 $DATAPATH;monetdbd start $DATAPATH;monetdbd get all $DATAPATH;monetdb start dataflow_analyzer;monetdb status
   # echo "cd $SIMULATION_DIR;killall monetdb;killall monetdbd;killall mserver5;monetdbd set port=54321 $DATAPATH; monetdbd start $DATAPATH;monetdbd get all $DATAPATH;monetdb start dataflow_analyzer;monetdb status"
   # ssh $host "cd $SIMULATION_DIR;monetdbd stop $DATAPATH;killall monetdb;killall monetdbd;killall mserver5;monetdbd set port=54321 $DATAPATH; monetdbd start $DATAPATH;monetdbd get all $DATAPATH;monetdb start dataflow_analyzer;monetdb status;" &
 done
