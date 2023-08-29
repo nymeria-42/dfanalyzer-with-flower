@@ -546,14 +546,25 @@ while tries < 100:
         END;"""
         )
 
+        # cursor.execute(
+        #     """
+        # CREATE OR REPLACE FUNCTION check_lost_client (_server_id int, _server_round int)
+        # RETURNS bool
+        # BEGIN
+        #     RETURN
+        #     (SELECT
+        #         get_clients_number_round(_server_id, _server_round) <> get_initial_clients_number(_server_id));
+        # END;"""
+        # )
+
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION check_lost_client (_server_id int, _server_round int)
+        CREATE OR REPLACE FUNCTION check_lost_client (_server_id int, _server_round int, min_clients_per_checkpoint int)
         RETURNS bool
         BEGIN
             RETURN
-            (SELECT
-                get_clients_number_round(_server_id, _server_round) <> get_initial_clients_number(_server_id));
+            SELECT NOT (SELECT
+                get_clients_number_round(_server_id, _server_round) >= min_clients_per_checkpoint);
         END;"""
         )
 
@@ -603,6 +614,22 @@ while tries < 100:
         END;"""
         )
 
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION get_last_max_clients(_server_id int) 
+        RETURNS int 
+        BEGIN 
+            RETURN
+                (SELECT server_round FROM (
+            SELECT server_round, COUNT(*) as n_clientes
+            FROM oclienttraining
+            WHERE server_id = _server_id
+            GROUP BY server_round
+            ORDER BY n_clientes DESC, server_round DESC LIMIT 1
+            ) t1);
+        END;"""
+        )
+
         conn.commit()
         cursor.close()
         conn.close()
@@ -610,3 +637,4 @@ while tries < 100:
     except Exception as e:
         time.sleep(1)
         tries += 1
+

@@ -474,14 +474,13 @@ class FlowerServer:
                 connection.close()
 
                 if self.fl_round != (last_round):
-                    query = f"""SELECT check_lost_client({self.server_id}, {self.fl_round})"""
+                    query = f"""SELECT check_lost_client({self.server_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
                     cursor.execute(operation=query)
                     lost_client = bool(cursor.fetchone()[0])
                     cursor.close()
                     connection.close()
                     
                     if not lost_client:
-
                         db = self.get_connection_mongodb()
                         pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"server_id": {"$eq": self.server_id}}]})
                         params = pickle.loads(pesos["global_weights"])
@@ -912,13 +911,13 @@ class FlowerServer:
             time.sleep(0.05)
 
         if result:
-            query = f"""SELECT check_lost_client({self.server_id}, {fl_round})"""
+            query = f"""SELECT check_lost_client({self.server_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
             cursor.execute(operation=query)
             lost_client = bool(cursor.fetchone()[0])
-        else:
-            lost_client = False
-        cursor.close()
-        connection.close()
+        # else:
+        #     lost_client = False
+            cursor.close()
+            connection.close()
 
 
 
