@@ -968,7 +968,7 @@ class FlowerServer:
             result = None
             tries = 0
             while tries < 100 and not result:
-                query = f"""SELECT check_if_last_round_is_already_recorded({server_id},{fl_round})"""
+                query = f"""SELECT check_if_last_round_is_already_recorded_evaluation({server_id},{fl_round})"""
                 cursor.execute(operation=query)
                 result = cursor.fetchone()
 
