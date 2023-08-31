@@ -354,6 +354,7 @@ tf13_output = Set(
     [
         Attribute("server_id", AttributeType.NUMERIC),
         Attribute("server_round", AttributeType.NUMERIC),
+        Attribute("client_loss", AttributeType.TEXT),
         Attribute("total_num_clients", AttributeType.NUMERIC),
         Attribute("total_num_examples", AttributeType.NUMERIC),
         Attribute("accuracy", AttributeType.NUMERIC),
@@ -533,7 +534,7 @@ while tries < 100:
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION get_clients_number_round (_server_id int, _server_round int)
+        CREATE OR REPLACE FUNCTION get_clients_number_round_fit (_server_id int, _server_round int)
         RETURNS int
         BEGIN
             RETURN
@@ -548,7 +549,7 @@ while tries < 100:
 
         # cursor.execute(
         #     """
-        # CREATE OR REPLACE FUNCTION check_lost_client (_server_id int, _server_round int)
+        # CREATE OR REPLACE FUNCTION check_client_loss (_server_id int, _server_round int)
         # RETURNS bool
         # BEGIN
         #     RETURN
@@ -559,12 +560,36 @@ while tries < 100:
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION check_lost_client (_server_id int, _server_round int, min_clients_per_checkpoint int)
+        CREATE OR REPLACE FUNCTION check_client_loss_fit (_server_id int, _server_round int, min_clients_per_checkpoint int)
         RETURNS bool
         BEGIN
             RETURN
-            SELECT NOT (SELECT
-                get_clients_number_round(_server_id, _server_round) >= min_clients_per_checkpoint);
+            SELECT (get_clients_number_round_fit(_server_id, _server_round) < min_clients_per_checkpoint);
+        END;"""
+        )
+
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION get_clients_number_round_evaluation (_server_id int, _server_round int)
+        RETURNS int
+        BEGIN
+            RETURN
+            (SELECT
+                COUNT(ct.client_id)
+            FROM 
+                oClientEvaluation ct
+            WHERE ct.server_round = _server_round
+                AND ct.server_id = _server_id);
+        END;"""
+        )
+
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION check_client_loss_evaluation (_server_id int, _server_round int, min_clients_per_checkpoint int)
+        RETURNS bool
+        BEGIN
+            RETURN
+            SELECT (get_clients_number_round_evaluation(_server_id, _server_round) < min_clients_per_checkpoint);
         END;"""
         )
 
@@ -585,7 +610,7 @@ while tries < 100:
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION get_last_round_with_all_clients (_server_id int)
+        CREATE OR REPLACE FUNCTION get_last_round_with_all_clients_fit (_server_id int)
         RETURNS int
         BEGIN
             RETURN
@@ -594,7 +619,22 @@ while tries < 100:
             FROM 
                oservertrainingaggregation sta
             WHERE sta.server_id=_server_id 
-            AND sta.client_loss <> false);
+            AND sta.client_loss = false);
+        END;"""
+        )
+
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION get_last_round_with_all_clients_evaluation (_server_id int)
+        RETURNS int
+        BEGIN
+            RETURN
+           ( SELECT
+                MAX(sea.server_round)
+            FROM 
+               oserverevaluationaggregation sea
+            WHERE sea.server_id=_server_id 
+            AND sea.client_loss = false);
         END;"""
         )
 

@@ -128,21 +128,26 @@ class Client(NumPyClient):
             if result:
                 query = f"""SELECT get_client_last_round({server_id}, {self.client_id})"""
                 cursor.execute(operation=query)
-                last_round = int(cursor.fetchone()[0])
-                cursor.close()
-                connection.close()
-                if fit_config["fl_round"] != (last_round+1):
-                    db = self.get_connection_mongodb(mongodb_settings["hostname"], mongodb_settings["port"])
-                    pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"server_id": {"$eq": server_id}}]})
-                    params = pickle.loads(pesos["global_weights"])
-                    if params: 
-                        message = f"Loading client {self.client_id} with global weights from round {last_round}"
-                        self.log_message(message, "INFO")
-                        self.model.set_weights(params)
-                    else:
-                        message = f"Couldn't find valid checkpoint for round {fit_config['fl_round']}"
-                        self.log_message(message, "INFO")
-                        last_round = None
+                round = cursor.fetchone()[0]
+                if round:
+                    last_round = int(cursor.fetchone()[0])
+                    cursor.close()
+                    connection.close()
+                    if fit_config["fl_round"] != (last_round+1):
+                        db = self.get_connection_mongodb(mongodb_settings["hostname"], mongodb_settings["port"])
+                        pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"server_id": {"$eq": server_id}}]})
+                        params = pickle.loads(pesos["global_weights"])
+                        if params: 
+                            message = f"Loading client {self.client_id} with global weights from round {last_round}"
+                            self.log_message(message, "INFO")
+                            self.model.set_weights(params)
+                        else:
+                            message = f"Couldn't find valid checkpoint for round {fit_config['fl_round']}"
+                            self.log_message(message, "INFO")
+                            last_round = None
+                else:
+                    message = f"New client: client_id = {self.client_id}"
+                    self.log_message(message, "INFO")
 
         # Replace All "None" String Values with None Type (Necessary Workaround on Flower v1.1.0).
         # Log the Training Configuration Received from the Server (If Logger is Enabled for "DEBUG" Level).
