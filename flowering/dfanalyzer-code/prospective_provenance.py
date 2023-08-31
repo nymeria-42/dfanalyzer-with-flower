@@ -619,7 +619,7 @@ while tries < 100:
             FROM 
                oservertrainingaggregation sta
             WHERE sta.server_id=_server_id 
-            AND sta.client_loss = false);
+            AND sta.client_loss = 'False');
         END;"""
         )
 
@@ -629,12 +629,12 @@ while tries < 100:
         RETURNS int
         BEGIN
             RETURN
-           ( SELECT
+           (SELECT
                 MAX(sea.server_round)
             FROM 
                oserverevaluationaggregation sea
             WHERE sea.server_id=_server_id 
-            AND sea.client_loss = false);
+            AND sea.client_loss = 'False');
         END;"""
         )
 
