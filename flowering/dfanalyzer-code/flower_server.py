@@ -817,7 +817,7 @@ class FlowerServer:
             result = None
             tries = 0
             while tries < 100 and not result:
-                query = f"""SELECT check_if_last_round_is_already_recorded({server_id},{fl_round})"""
+                query = f"""SELECT check_if_last_round_is_already_recorded_fit({server_id},{fl_round})"""
                 cursor.execute(operation=query)
                 result = cursor.fetchone()
 
@@ -868,14 +868,13 @@ class FlowerServer:
             connection = self.get_connection_monetdb()
 
             cursor = connection.cursor()
-
             query = f"""SELECT get_last_round_with_all_clients_evaluation({server_id})"""
             cursor.execute(operation=query)
             last_round = int(cursor.fetchone()[0])
-            if fl_round != last_round:
-                query = f"""SELECT check_client_loss_evaluation({server_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
-                cursor.execute(operation=query)
-                client_loss = bool(cursor.fetchone()[0])
+            if fl_round != last_round+1:
+                # query = f"""SELECT check_client_loss_fit({server_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
+                # cursor.execute(operation=query)
+                # client_loss = bool(cursor.fetchone()[0])
                 
                 if not client_loss:
                     db = self.get_connection_mongodb()
@@ -978,7 +977,7 @@ class FlowerServer:
                 time.sleep(0.05)
 
             if result:
-                query = f"""SELECT check_client_loss_evaluation({server_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
+                query = f"""SELECT check_client_loss_fit({server_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
                 cursor.execute(operation=query)
                 client_loss = bool(cursor.fetchone()[0])
             cursor.close()
@@ -1010,9 +1009,9 @@ class FlowerServer:
             cursor.execute(operation=query)
             last_round = int(cursor.fetchone()[0])
             if fl_round != last_round:
-                query = f"""SELECT check_client_loss_fit({server_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
-                cursor.execute(operation=query)
-                client_loss = bool(cursor.fetchone()[0])
+                # query = f"""SELECT check_client_loss_fit({server_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
+                # cursor.execute(operation=query)
+                # client_loss = bool(cursor.fetchone()[0])
                 
                 if not client_loss:
                     db = self.get_connection_mongodb()

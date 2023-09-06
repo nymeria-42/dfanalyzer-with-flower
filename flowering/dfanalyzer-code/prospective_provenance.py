@@ -656,6 +656,21 @@ while tries < 100:
 
         cursor.execute(
             """
+        CREATE OR REPLACE FUNCTION check_if_last_round_is_already_recorded_fit(_server_id int, _server_round int) 
+        RETURNS int 
+        BEGIN 
+            RETURN
+                (SELECT 
+                    COUNT(ct.client_id) 
+                FROM 
+                    oclienttraining  ct
+                WHERE ct.server_round =  _server_round
+                    AND ct.server_id = _server_id;
+        END;"""
+        )
+
+        cursor.execute(
+            """
         CREATE OR REPLACE FUNCTION check_if_last_round_is_already_recorded_evaluation(_server_id int, _server_round int) 
         RETURNS int 
         BEGIN 
