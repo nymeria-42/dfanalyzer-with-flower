@@ -244,6 +244,35 @@ class Client(NumPyClient):
         t8.add_dataset(t8_output)
         t8.end()
 
+        if fit_config["fl_round"] > 1 and fit_config["action"] == 'rollback':
+
+            connection = connect(
+                hostname=monetdb_settings["hostname"],
+                port=monetdb_settings["port"],
+                username=monetdb_settings["username"],
+                password=monetdb_settings["password"],
+                database=monetdb_settings["database"],
+            )
+
+            cursor = connection.cursor()
+
+            result = None
+            tries = 0
+            fl_round = fit_config["fl_round"]
+            server_id = fit_config["server_id"]
+            while not result:
+                query = f"""SELECT check_if_last_round_is_recorded_fit_client({server_id},{fl_round}, {self.client_id})"""
+                cursor.execute(operation=query)
+                connection.commit()
+                result = cursor.fetchone()
+
+                self.log_message(f"RESULT CLIENT {self.client_id}: {result}", "INFO")
+
+                if result:
+                    result = result[-1]
+                tries += 1
+                time.sleep(0.05)
+
         # Return the Model's Local Weights, Number of Training Examples, and Training Metrics to be Sent to the Server.
         return weight_tensors_list, num_training_examples, training_metrics
 
@@ -326,6 +355,37 @@ class Client(NumPyClient):
         testing_metrics.update({"evaluate_time": evaluate_time_end})
         # Get the Loss Metric.
         loss = testing_metrics["loss"]
+        monetdb_settings = { k.replace("monetdb_",""): v for k, v in evaluate_config.items() if 'monetdb' in k}
+
+        if evaluate_config["fl_round"] > 1 and evaluate_config["action"] == 'rollback':
+
+            connection = connect(
+                hostname=monetdb_settings["hostname"],
+                port=monetdb_settings["port"],
+                username=monetdb_settings["username"],
+                password=monetdb_settings["password"],
+                database=monetdb_settings["database"],
+            )
+
+            cursor = connection.cursor()
+
+            result = None
+            tries = 0
+            fl_round = evaluate_config["fl_round"]
+            server_id = evaluate_config["server_id"]
+
+            while not result:
+                query = f"""SELECT check_if_last_round_is_recorded_evaluation_client({server_id},{fl_round}, {self.client_id})"""
+                cursor.execute(operation=query)
+                connection.commit()
+                result = cursor.fetchone()
+
+                self.log_message(f"RESULT CLIENT {self.client_id} EVALUATION: {result}", "INFO")
+
+                if result:
+                    result = result[-1]
+                tries += 1
+                time.sleep(0.05)
         # Return the Loss Metric, Number of Testing Examples, and Testing Metrics to be Sent to the Server.
         return loss, num_testing_examples, testing_metrics
 

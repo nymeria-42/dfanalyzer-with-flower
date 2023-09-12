@@ -383,7 +383,7 @@ df.save()
 
 tries = 0
 
-while tries < 100:
+while True:
     try:
         conn = pymonetdb.connect(
             hostname=monetdb_settings["hostname"],
@@ -665,7 +665,7 @@ while tries < 100:
                 FROM 
                     oclienttraining  ct
                 WHERE ct.server_round =  _server_round
-                    AND ct.server_id = _server_id;
+                    AND ct.server_id = _server_id);
         END;"""
         )
 
@@ -681,6 +681,38 @@ while tries < 100:
                     oclientevaluation  ce
                 WHERE ce.server_round =  _server_round
                     AND ce.server_id = _server_id);
+        END;"""
+        )
+
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION check_if_last_round_is_recorded_fit_client(_server_id int, _server_round int, _client_id int) 
+        RETURNS int 
+        BEGIN 
+            RETURN
+                (SELECT 
+                    COUNT(ct.client_id) 
+                FROM 
+                    oclienttraining  ct
+                WHERE ct.server_round =  _server_round
+                    AND ct.server_id = _server_id
+                    AND ct.client_id = _client_id);
+        END;"""
+        )
+
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION check_if_last_round_is_recorded_evaluation_client(_server_id int, _server_round int, _client_id int) 
+        RETURNS int 
+        BEGIN 
+            RETURN
+                (SELECT 
+                    COUNT(ce.client_id) 
+                FROM 
+                    oclientevaluation  ce
+                WHERE ce.server_round =  _server_round
+                    AND ce.server_id = _server_id
+                    AND ce.client_id = _client_id);
         END;"""
         )
 

@@ -474,7 +474,7 @@ class FlowerServer:
         result = None
         tries = 0
         fl_round = self.get_attribute("fl_round")
-        while tries < 100 and not result:
+        while not result:
             query = f"""SELECT check_if_last_round_is_already_recorded({self.server_id},{fl_round})"""
             cursor.execute(operation=query)
             result = cursor.fetchone()
@@ -750,6 +750,20 @@ class FlowerServer:
         t11.add_dataset(t11_output)
         t11.end()
 
+        mongodb = {"hostname": self.mongodb_settings["hostname"],
+            "port": self.mongodb_settings["port"],
+            }
+        
+        monetdb = {"hostname": self.monetdb_settings["hostname"],
+            "port": self.monetdb_settings["port"],
+            "username": self.monetdb_settings["username"],
+            "password": self.monetdb_settings["password"],
+            "database": self.monetdb_settings["database"]}
+        
+        evaluate_config.update({'action': self.checkpoints_settings["action"], "server_id": self.get_attribute("server_id"), "monetdb_hostname": monetdb["hostname"],
+                           "monetdb_port": monetdb["port"], "monetdb_username": monetdb["username"], "monetdb_password": monetdb["password"], "monetdb_database": monetdb["database"],
+                           "mongodb_hostname": mongodb["hostname"], "mongodb_port": mongodb["port"]})
+
         # Return the Testing Configuration to be Sent to All Participating Clients.
         return evaluate_config
 
@@ -816,10 +830,11 @@ class FlowerServer:
         if fl_round > 1:
             result = None
             tries = 0
-            while tries < 100 and not result:
+            while not result:
                 query = f"""SELECT check_if_last_round_is_already_recorded_fit({server_id},{fl_round})"""
                 cursor.execute(operation=query)
                 result = cursor.fetchone()
+                self.log_message(f"RESULT={result}", "INFO")
 
                 if result:
                     result = result[-1]
@@ -871,7 +886,7 @@ class FlowerServer:
             query = f"""SELECT get_last_round_with_all_clients_evaluation({server_id})"""
             cursor.execute(operation=query)
             last_round = int(cursor.fetchone()[0])
-            if fl_round != last_round+1:
+            if fl_round != (last_round+1):
                 # query = f"""SELECT check_client_loss_fit({server_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
                 # cursor.execute(operation=query)
                 # client_loss = bool(cursor.fetchone()[0])
@@ -894,7 +909,7 @@ class FlowerServer:
                         self.log_message(message, "INFO")
                         last_round = None
                 else:
-                    message = f"Client missing in {self.fl_round}! Waiting return to execute rollback."
+                    message = f"Client missing at round {self.fl_round}! Waiting return to execute rollback."
                     self.log_message(message, "INFO")
 
             cursor.close()
@@ -966,10 +981,12 @@ class FlowerServer:
         if fl_round > 1:
             result = None
             tries = 0
-            while tries < 100 and not result:
+            while not result:
                 query = f"""SELECT check_if_last_round_is_already_recorded_evaluation({server_id},{fl_round})"""
                 cursor.execute(operation=query)
                 result = cursor.fetchone()
+                
+                self.log_message(f"RESULT EVALUATION={result}", "INFO")
 
                 if result:
                     result = result[-1]
@@ -977,7 +994,7 @@ class FlowerServer:
                 time.sleep(0.05)
 
             if result:
-                query = f"""SELECT check_client_loss_fit({server_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
+                query = f"""SELECT check_client_loss_evaluation({server_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
                 cursor.execute(operation=query)
                 client_loss = bool(cursor.fetchone()[0])
             cursor.close()
@@ -1024,7 +1041,6 @@ class FlowerServer:
                             "global_model_parameters",
                             params,
                         )
-                        return None
 
                     else:
                         message = f"Couldn't find valid checkpoint for round {fl_round}"
