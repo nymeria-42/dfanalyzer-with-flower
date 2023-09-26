@@ -56,7 +56,7 @@ fi
 server_config_file=${1}
 
 # Set Server's ID.
-server_id="0"
+server_id=${2}
 
 # Launch the Flower Server (Background Process).
 python3  dfanalyzer-code/flower_server.py \

@@ -12,6 +12,27 @@ from dfa_lib_python.extractor_extension import ExtractorExtension
 from dfa_lib_python.dependency import Dependency
 import time
 import pymonetdb
+from argparse import ArgumentParser
+from configparser import ConfigParser
+from pathlib import Path
+
+
+ag = ArgumentParser(description="Flower Server Arguments")
+
+ag.add_argument(
+        "--server_config_file",
+        type=Path,
+        required=False,
+        default="config/flower_server.cfg",
+        help="Server Config File (no default)",
+        dest="server_config_file"
+    )
+
+parsed_args = ag.parse_args()
+cp = ConfigParser()
+cp.optionxform = str
+cp.read(filenames=parsed_args.server_config_file, encoding="utf-8")
+monetdb_settings =  cp["MonetDB Settings"]
 
 # DfAnalyzer Instrumentation
 dataflow_tag = "flower-df"
@@ -148,8 +169,8 @@ tf7_input = Set(
     "iTrainingConfig",
     SetType.INPUT,
     [
+        Attribute("server_id", AttributeType.NUMERIC),
         Attribute("server_round", AttributeType.NUMERIC),
-        Attribute("dynamically_adjusted", AttributeType.TEXT),
         Attribute("starting_time", AttributeType.TEXT),
         Attribute("ending_time", AttributeType.TEXT),
         Attribute("shuffle", AttributeType.TEXT),
@@ -165,7 +186,10 @@ tf7_input = Set(
 tf7_output = Set(
     "oTrainingConfig",
     SetType.OUTPUT,
-    [],
+    [
+        Attribute("server_round", AttributeType.NUMERIC),
+        Attribute("dynamically_adjusted", AttributeType.TEXT),
+    ],
 )
 
 tf1_output.set_type(SetType.INPUT)
@@ -188,12 +212,12 @@ tf8_output = Set(
         Attribute("server_round", AttributeType.NUMERIC),
         Attribute("training_time", AttributeType.NUMERIC),
         Attribute("size_x_train", AttributeType.NUMERIC),
-        Attribute("global_current_parameters", AttributeType.TEXT),
+        Attribute("local_weights", AttributeType.TEXT),
         Attribute("accuracy", AttributeType.NUMERIC),
         Attribute("loss", AttributeType.NUMERIC),
         Attribute("val_loss", AttributeType.NUMERIC),
         Attribute("val_accuracy", AttributeType.TEXT),
-        Attribute("local_weights", AttributeType.TEXT),
+        Attribute("global_weights", AttributeType.TEXT),
         Attribute("starting_time", AttributeType.TEXT),
         Attribute("ending_time", AttributeType.TEXT),
     ],
@@ -231,6 +255,7 @@ tf9_output = Set(
     "oServerTrainingAggregation",
     SetType.OUTPUT,
     [
+        Attribute("server_id", AttributeType.NUMERIC),
         Attribute("server_round", AttributeType.NUMERIC),
         Attribute("total_num_clients", AttributeType.NUMERIC),
         Attribute("total_num_examples", AttributeType.NUMERIC),
@@ -301,6 +326,7 @@ tf12_output = Set(
     "oServerEvaluationAggregation",
     SetType.OUTPUT,
     [
+        Attribute("server_id", AttributeType.NUMERIC),
         Attribute("server_round", AttributeType.NUMERIC),
         Attribute("total_num_clients", AttributeType.NUMERIC),
         Attribute("total_num_examples", AttributeType.NUMERIC),
@@ -327,25 +353,28 @@ tf7.set_sets([tf12_output])
 df.add_transformation(tf7)
 
 df.save()
+
 tries = 0
-while tries < 100:
+
+while True:
     try:
         conn = pymonetdb.connect(
-            username="monetdb",
-            password="monetdb",
-            hostname="localhost",
-            port="50000",
-            database="dataflow_analyzer",
+            hostname=monetdb_settings["hostname"],
+            port=monetdb_settings["port"],
+            username=monetdb_settings["username"],
+            password=monetdb_settings["password"],
+            database=monetdb_settings["database"]
         )
+
         cursor = conn.cursor()
         cursor.execute(
             """
         CREATE OR REPLACE FUNCTION check_metrics (fl_round int)
-        RETURNS table (training_time double, accuracy_training double, loss_training double,
+        RETURNS table (training_time double, accuracy_training double, loss_training double, 
             val_accuracy double, val_loss double, accuracy_evaluation double, loss_evaluation double)
         BEGIN
             RETURN
-            SELECT
+            (SELECT
                 st.training_time,
                 st.accuracy,
                 st.loss,
@@ -355,46 +384,45 @@ while tries < 100:
                 se.loss
             FROM
                 oservertrainingaggregation as st
-            JOIN
+            JOIN 
                 oserverevaluationaggregation as se
             ON
                 st.server_round = se.server_round
             WHERE
-                st.server_round = fl_round;
+                st.server_round = fl_round);
         END;"""
         )
 
         cursor.execute(
-            """CREATE FUNCTION update_hyperparameters (threshold double,
+            """CREATE OR REPLACE FUNCTION update_hyperparameters (accuracy_goal double,
         limit_training_time double,
         limit_accuracy_change double,
         fl_round int)
         RETURNS boolean
         BEGIN
             RETURN
-            SELECT
-                CASE WHEN (SELECT DISTINCT dynamically_adjusted FROM itrainingconfig
-                WHERE server_round BETWEEN fl_round - 2 AND fl_round - 1 AND dynamically_adjusted = 'True') IS NOT NULL THEN 0
-                    ELSE (
-                SELECT
-                DISTINCT
+            (SELECT 
+                CASE WHEN (SELECT DISTINCT dynamically_adjusted FROM otrainingconfig
+                    WHERE server_round BETWEEN fl_round - 2 AND fl_round - 1 AND dynamically_adjusted = 'True') IS NOT NULL THEN 0
+                    WHEN (SELECT DISTINCT
                     CASE
                         WHEN (last_value(accuracy_training) OVER () < accuracy_goal
-                            AND last_value(training_time) OVER () < limit_training_time*60 
-                            AND (last_value(accuracy_training) OVER () > first_value(accuracy_training) OVER ()
-                            AND last_value(val_accuracy) OVER () > first_value(val_accuracy) OVER ())
-                            AND last_value(accuracy_training) OVER () - first_value(accuracy_training) OVER () < limit_accuracy_change)
+                        AND last_value(training_time) OVER () < limit_training_time*60 
+                        AND (last_value(accuracy_training) OVER () > first_value(accuracy_training) OVER ()
+                        AND last_value(val_accuracy) OVER () > first_value(val_accuracy) OVER ())
+                        AND last_value(accuracy_training) OVER () - first_value(accuracy_training) OVER () < limit_accuracy_change)
+                        THEN 1
                         ELSE 0
                     END
-                FROM
-                    (
-                    SELECT * FROM check_metrics(fl_round - 2)
-                    UNION
-                    SELECT * FROM check_metrics(fl_round - 1)) AS t1)
-                END;
+                    FROM
+                        (
+                        SELECT * FROM check_metrics(fl_round - 2)
+                        UNION 
+                        SELECT * FROM check_metrics(fl_round - 1)) AS t1) THEN 1
+                ELSE 0
+            END);
         END;"""
         )
-
         conn.commit()
         cursor.close()
         conn.close()

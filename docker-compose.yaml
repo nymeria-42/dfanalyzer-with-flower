@@ -30,8 +30,41 @@ services:
       [
         "bash",
         "script/start_flower_server.sh",
-        "config/flower_server.cfg"
+        "config/flower_server.cfg",
+        "0"
       ]
+
+
+  server1:
+    image: dfanalyzer
+    restart: "no"
+    network_mode: "host"
+    environment:
+      - DFA_URL=http://localhost:22000
+    # ports:
+    #  - 8080:8080
+    volumes:
+      - ./flowering:/applications/flowering
+    working_dir: "/applications/flowering/"
+    entrypoint:
+      [
+        "bash",
+        "script/start_flower_server.sh",
+        "config/flower_server.cfg",
+        "1"
+      ]
+
+
+  prospective-provenance:
+    image: dfanalyzer
+    restart: "no"
+    network_mode: "host"
+    environment:
+      - DFA_URL=http://localhost:22000
+    volumes:
+      - ./flowering:/applications/flowering
+    working_dir: "/applications/flowering"
+    command: bash -c " python3 dfanalyzer-code/prospective_provenance.py"
 
   client1:
     image: dfanalyzer
