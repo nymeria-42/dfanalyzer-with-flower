@@ -426,6 +426,7 @@ class FlowerServer:
         \nThe 'losses_centralized' and 'metrics_centralized' will only contain values using this centralized evaluation.
         \nAlternative: Client-side (Federated) evaluation."""
 
+        self.global_model_parameters = global_model_parameters
         return None
 
     def is_enabled_hyper_parameters_dynamic_adjustment(self, phase: str) -> bool:
@@ -902,7 +903,6 @@ class FlowerServer:
                             "global_model_parameters",
                             params,
                         )
-                        return None
 
                     else:
                         message = f"Couldn't find valid checkpoint for round {fl_round}"
