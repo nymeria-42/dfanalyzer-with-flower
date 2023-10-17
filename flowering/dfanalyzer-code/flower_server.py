@@ -683,7 +683,7 @@ class FlowerServer:
         t8.add_dataset(t8_input)
         t8_output = DataSet(
             "oTrainingConfig",
-            [Element([fl_round, dynamically_adjusted])],
+            [Element([self.get_attribute("server_id"), fl_round, dynamically_adjusted])],
         )
         t8.add_dataset(t8_output)
         t8.end()
@@ -742,7 +742,7 @@ class FlowerServer:
         )
         t11.begin()
         attributes = ["batch_size", "steps"]
-        to_dfanalyzer = [evaluate_config.get(attr, 0) for attr in attributes]
+        to_dfanalyzer = [self.get_attribute("server_id")] + [evaluate_config.get(attr, 0) for attr in attributes]
 
         t11_input = DataSet("iEvaluationConfig", [Element(to_dfanalyzer)])
         t11.add_dataset(t11_input)

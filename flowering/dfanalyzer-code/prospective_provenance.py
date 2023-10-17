@@ -206,6 +206,7 @@ tf8_output = Set(
     "oTrainingConfig",
     SetType.OUTPUT,
     [
+        Attribute("server_id", AttributeType.NUMERIC),
         Attribute("server_round", AttributeType.NUMERIC),
         Attribute("dynamically_adjusted", AttributeType.TEXT),
     ],
@@ -305,6 +306,7 @@ tf11_input = Set(
     "iEvaluationConfig",
     SetType.INPUT,
     [
+        Attribute("server_id", AttributeType.NUMERIC),
         Attribute("batch_size", AttributeType.NUMERIC),
         Attribute("steps", AttributeType.TEXT),
     ],
