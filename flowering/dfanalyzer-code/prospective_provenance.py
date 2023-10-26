@@ -43,7 +43,7 @@ tf1_input = Set(
     "iServerConfig",
     SetType.INPUT,
     [
-        Attribute("server_id", AttributeType.NUMERIC),
+        Attribute("experiment_id", AttributeType.NUMERIC),
         Attribute("address", AttributeType.TEXT),
         Attribute("max_message_length_in_bytes", AttributeType.TEXT),
         Attribute("num_rounds", AttributeType.NUMERIC),
@@ -69,7 +69,7 @@ tf2_input = Set(
     "iLoadGlobalWeights",
     SetType.INPUT,
     [
-        Attribute("server_id", AttributeType.NUMERIC),
+        Attribute("experiment_id", AttributeType.NUMERIC),
         Attribute("starting_time", AttributeType.TEXT),
         Attribute("ending_time", AttributeType.TEXT),
         Attribute("loading_time", AttributeType.TEXT),
@@ -101,6 +101,7 @@ tf4_input = Set(
     "iDatasetLoad",
     SetType.INPUT,
     [
+        Attribute("experiment_id", AttributeType.NUMERIC),
         Attribute("client_id", AttributeType.NUMERIC),
         Attribute("loading_time", AttributeType.TEXT),
     ],
@@ -114,6 +115,7 @@ tf5_input = Set(
     "iModelConfig",
     SetType.INPUT,
     [
+        Attribute("experiment_id", AttributeType.NUMERIC),
         Attribute("model", AttributeType.TEXT),
         Attribute("optimizer", AttributeType.TEXT),
         Attribute("loss_function", AttributeType.TEXT),
@@ -147,6 +149,7 @@ tf6_input = Set(
     "iOptimizerConfig",
     SetType.INPUT,
     [
+        Attribute("experiment_id", AttributeType.NUMERIC),
         Attribute("learning_rate", AttributeType.NUMERIC),
         Attribute("momentum", AttributeType.NUMERIC),
         Attribute("nesterov", AttributeType.TEXT),
@@ -168,6 +171,7 @@ tf7_input = Set(
     "iLossConfig",
     SetType.INPUT,
     [
+        Attribute("experiment_id", AttributeType.NUMERIC),
         Attribute("from_logits", AttributeType.TEXT),
         Attribute("ignore_class", AttributeType.TEXT),
         Attribute("reduction", AttributeType.TEXT),
@@ -188,7 +192,7 @@ tf8_input = Set(
     "iTrainingConfig",
     SetType.INPUT,
     [
-        Attribute("server_id", AttributeType.NUMERIC),
+        Attribute("experiment_id", AttributeType.NUMERIC),
         Attribute("server_round", AttributeType.NUMERIC),
         Attribute("starting_time", AttributeType.TEXT),
         Attribute("ending_time", AttributeType.TEXT),
@@ -206,7 +210,7 @@ tf8_output = Set(
     "oTrainingConfig",
     SetType.OUTPUT,
     [
-        Attribute("server_id", AttributeType.NUMERIC),
+        Attribute("experiment_id", AttributeType.NUMERIC),
         Attribute("server_round", AttributeType.NUMERIC),
         Attribute("dynamically_adjusted", AttributeType.TEXT),
     ],
@@ -231,8 +235,8 @@ tf9_output = Set(
     "oClientTraining",
     SetType.OUTPUT,
     [
+        Attribute("experiment_id", AttributeType.NUMERIC),
         Attribute("client_id", AttributeType.NUMERIC),
-        Attribute("server_id", AttributeType.NUMERIC),
         Attribute("server_round", AttributeType.NUMERIC),
         Attribute("training_time", AttributeType.NUMERIC),
         Attribute("size_x_train", AttributeType.NUMERIC),
@@ -278,7 +282,7 @@ tf10_output = Set(
     "oServerTrainingAggregation",
     SetType.OUTPUT,
     [
-        Attribute("server_id", AttributeType.NUMERIC),
+        Attribute("experiment_id", AttributeType.NUMERIC),
         Attribute("server_round", AttributeType.NUMERIC),
         Attribute("total_num_clients", AttributeType.NUMERIC),
         Attribute("client_loss", AttributeType.TEXT),
@@ -306,7 +310,7 @@ tf11_input = Set(
     "iEvaluationConfig",
     SetType.INPUT,
     [
-        Attribute("server_id", AttributeType.NUMERIC),
+        Attribute("experiment_id", AttributeType.NUMERIC),
         Attribute("batch_size", AttributeType.NUMERIC),
         Attribute("steps", AttributeType.TEXT),
     ],
@@ -330,8 +334,8 @@ tf12_output = Set(
     "oClientEvaluation",
     SetType.OUTPUT,
     [
+        Attribute("experiment_id", AttributeType.NUMERIC),
         Attribute("client_id", AttributeType.NUMERIC),
-        Attribute("server_id", AttributeType.NUMERIC),
         Attribute("server_round", AttributeType.NUMERIC),
         Attribute("loss", AttributeType.NUMERIC),
         Attribute("evaluation_time", AttributeType.NUMERIC),
@@ -354,7 +358,7 @@ tf13_output = Set(
     "oServerEvaluationAggregation",
     SetType.OUTPUT,
     [
-        Attribute("server_id", AttributeType.NUMERIC),
+        Attribute("experiment_id", AttributeType.NUMERIC),
         Attribute("server_round", AttributeType.NUMERIC),
         Attribute("client_loss", AttributeType.TEXT),
         Attribute("total_num_clients", AttributeType.NUMERIC),
@@ -455,7 +459,7 @@ while True:
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION check_last_round_fl (_server_id int)
+        CREATE OR REPLACE FUNCTION check_last_round_fl (_experiment_id int)
         RETURNS int
         BEGIN
             RETURN
@@ -463,13 +467,13 @@ while True:
                 MAX(st.server_round)
             FROM
                 oservertrainingaggregation st
-            WHERE st.server_id = _server_id);
+            WHERE st.experiment_id = _experiment_id);
         END;"""
         )
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION check_last_round_fl_client_loss (_server_id int, _client_loss bool)
+        CREATE OR REPLACE FUNCTION check_last_round_fl_client_loss (_experiment_id int, _client_loss bool)
         RETURNS int
         BEGIN
             RETURN
@@ -477,13 +481,13 @@ while True:
                 MAX(st.server_round)
             FROM
                 oservertrainingaggregation st
-            WHERE st.server_id = _server_id AND st.client_loss=_client_loss);
+            WHERE st.experiment_id = _experiment_id AND st.client_loss=_client_loss);
         END;"""
         )
 
         cursor.execute(
             """
-            CREATE OR REPLACE FUNCTION get_num_rounds (_server_id int)
+            CREATE OR REPLACE FUNCTION get_num_rounds (_experiment_id int)
             RETURNS int
             BEGIN
                 RETURN
@@ -491,29 +495,29 @@ while True:
                     num_rounds
                 FROM 
                     iServerConfig as sc
-                WHERE sc.server_id = _server_id);
+                WHERE sc.experiment_id = _experiment_id);
             END;"""
         )
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION check_ending_fl (_server_id int)
+        CREATE OR REPLACE FUNCTION check_ending_fl (_experiment_id int)
         RETURNS bool
         BEGIN
             RETURN
             (SELECT
-                check_last_round_fl(_server_id) = get_num_rounds(_server_id));
+                check_last_round_fl(_experiment_id) = get_num_rounds(_experiment_id));
         END;"""
         )
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION check_max_server_id ()
+        CREATE OR REPLACE FUNCTION check_max_experiment_id ()
         RETURNS int
         BEGIN
             RETURN
             (SELECT
-                MAX(server_id)
+                MAX(experiment_id)
             FROM 
                 iServerConfig as sc);
         END;"""
@@ -521,7 +525,7 @@ while True:
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION get_initial_clients_number (_server_id int)
+        CREATE OR REPLACE FUNCTION get_initial_clients_number (_experiment_id int)
         RETURNS int
         BEGIN
             RETURN
@@ -530,13 +534,13 @@ while True:
             FROM 
                 oClientTraining ct
             WHERE ct.server_round = 1
-            AND ct.server_id = _server_id);
+            AND ct.experiment_id = _experiment_id);
         END;"""
         )
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION get_clients_number_round_fit (_server_id int, _server_round int)
+        CREATE OR REPLACE FUNCTION get_clients_number_round_fit (_experiment_id int, _server_round int)
         RETURNS int
         BEGIN
             RETURN
@@ -545,34 +549,34 @@ while True:
             FROM 
                 oClientTraining ct
             WHERE ct.server_round = _server_round
-                AND ct.server_id = _server_id);
+                AND ct.experiment_id = _experiment_id);
         END;"""
         )
 
         # cursor.execute(
         #     """
-        # CREATE OR REPLACE FUNCTION check_client_loss (_server_id int, _server_round int)
+        # CREATE OR REPLACE FUNCTION check_client_loss (_experiment_id int, _server_round int)
         # RETURNS bool
         # BEGIN
         #     RETURN
         #     (SELECT
-        #         get_clients_number_round(_server_id, _server_round) <> get_initial_clients_number(_server_id));
+        #         get_clients_number_round(_experiment_id, _server_round) <> get_initial_clients_number(_experiment_id));
         # END;"""
         # )
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION check_client_loss_fit (_server_id int, _server_round int, min_clients_per_checkpoint int)
+        CREATE OR REPLACE FUNCTION check_client_loss_fit (_experiment_id int, _server_round int, min_clients_per_checkpoint int)
         RETURNS bool
         BEGIN
             RETURN
-            SELECT (get_clients_number_round_fit(_server_id, _server_round) < min_clients_per_checkpoint);
+            SELECT (get_clients_number_round_fit(_experiment_id, _server_round) < min_clients_per_checkpoint);
         END;"""
         )
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION get_clients_number_round_evaluation (_server_id int, _server_round int)
+        CREATE OR REPLACE FUNCTION get_clients_number_round_evaluation (_experiment_id int, _server_round int)
         RETURNS int
         BEGIN
             RETURN
@@ -581,23 +585,23 @@ while True:
             FROM 
                 oClientEvaluation ct
             WHERE ct.server_round = _server_round
-                AND ct.server_id = _server_id);
+                AND ct.experiment_id = _experiment_id);
         END;"""
         )
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION check_client_loss_evaluation (_server_id int, _server_round int, min_clients_per_checkpoint int)
+        CREATE OR REPLACE FUNCTION check_client_loss_evaluation (_experiment_id int, _server_round int, min_clients_per_checkpoint int)
         RETURNS bool
         BEGIN
             RETURN
-            SELECT (get_clients_number_round_evaluation(_server_id, _server_round) < min_clients_per_checkpoint);
+            SELECT (get_clients_number_round_evaluation(_experiment_id, _server_round) < min_clients_per_checkpoint);
         END;"""
         )
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION get_client_last_round (_server_id int, _client_id int)
+        CREATE OR REPLACE FUNCTION get_client_last_round (_experiment_id int, _client_id int)
         RETURNS int
         BEGIN
             RETURN
@@ -606,13 +610,13 @@ while True:
             FROM 
                 oClientTraining ct
             WHERE ct.client_id = _client_id
-                AND ct.server_id=_server_id);
+                AND ct.experiment_id=_experiment_id);
         END;"""
         )
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION get_last_round_with_all_clients_fit (_server_id int)
+        CREATE OR REPLACE FUNCTION get_last_round_with_all_clients_fit (_experiment_id int)
         RETURNS int
         BEGIN
             RETURN
@@ -620,14 +624,14 @@ while True:
                 MAX(sta.server_round)
             FROM 
                oservertrainingaggregation sta
-            WHERE sta.server_id=_server_id 
+            WHERE sta.experiment_id=_experiment_id 
             AND sta.client_loss = 'False');
         END;"""
         )
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION get_last_round_with_all_clients_evaluation (_server_id int)
+        CREATE OR REPLACE FUNCTION get_last_round_with_all_clients_evaluation (_experiment_id int)
         RETURNS int
         BEGIN
             RETURN
@@ -635,7 +639,7 @@ while True:
                 MAX(sea.server_round)
             FROM 
                oserverevaluationaggregation sea
-            WHERE sea.server_id=_server_id 
+            WHERE sea.experiment_id=_experiment_id 
             AND sea.client_loss = 'False');
         END;"""
         )
@@ -643,7 +647,7 @@ while True:
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION check_if_last_round_is_already_recorded(_server_id int, _server_round int) 
+        CREATE OR REPLACE FUNCTION check_if_last_round_is_already_recorded(_experiment_id int, _server_round int) 
         RETURNS int 
         BEGIN 
             RETURN
@@ -652,13 +656,13 @@ while True:
                 FROM 
                     oserverevaluationaggregation  se
                 WHERE se.server_round = ( _server_round - 1 )
-                    AND se.server_id = _server_id);
+                    AND se.experiment_id = _experiment_id);
         END;"""
         )
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION check_if_last_round_is_already_recorded_fit(_server_id int, _server_round int) 
+        CREATE OR REPLACE FUNCTION check_if_last_round_is_already_recorded_fit(_experiment_id int, _server_round int) 
         RETURNS int 
         BEGIN 
             RETURN
@@ -667,13 +671,13 @@ while True:
                 FROM 
                     oclienttraining  ct
                 WHERE ct.server_round =  _server_round
-                    AND ct.server_id = _server_id);
+                    AND ct.experiment_id = _experiment_id);
         END;"""
         )
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION check_if_last_round_is_already_recorded_evaluation(_server_id int, _server_round int) 
+        CREATE OR REPLACE FUNCTION check_if_last_round_is_already_recorded_evaluation(_experiment_id int, _server_round int) 
         RETURNS int 
         BEGIN 
             RETURN
@@ -682,13 +686,13 @@ while True:
                 FROM 
                     oclientevaluation  ce
                 WHERE ce.server_round =  _server_round
-                    AND ce.server_id = _server_id);
+                    AND ce.experiment_id = _experiment_id);
         END;"""
         )
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION check_if_last_round_is_recorded_fit_client(_server_id int, _server_round int, _client_id int) 
+        CREATE OR REPLACE FUNCTION check_if_last_round_is_recorded_fit_client(_experiment_id int, _server_round int, _client_id int) 
         RETURNS int 
         BEGIN 
             RETURN
@@ -697,14 +701,14 @@ while True:
                 FROM 
                     oclienttraining  ct
                 WHERE ct.server_round =  _server_round
-                    AND ct.server_id = _server_id
+                    AND ct.experiment_id = _experiment_id
                     AND ct.client_id = _client_id);
         END;"""
         )
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION check_if_last_round_is_recorded_evaluation_client(_server_id int, _server_round int, _client_id int) 
+        CREATE OR REPLACE FUNCTION check_if_last_round_is_recorded_evaluation_client(_experiment_id int, _server_round int, _client_id int) 
         RETURNS int 
         BEGIN 
             RETURN
@@ -713,21 +717,21 @@ while True:
                 FROM 
                     oclientevaluation  ce
                 WHERE ce.server_round =  _server_round
-                    AND ce.server_id = _server_id
+                    AND ce.experiment_id = _experiment_id
                     AND ce.client_id = _client_id);
         END;"""
         )
 
         cursor.execute(
             """
-        CREATE OR REPLACE FUNCTION get_last_max_clients(_server_id int) 
+        CREATE OR REPLACE FUNCTION get_last_max_clients(_experiment_id int) 
         RETURNS int 
         BEGIN 
             RETURN
                 (SELECT server_round FROM (
             SELECT server_round, COUNT(*) as n_clientes
             FROM oclienttraining
-            WHERE server_id = _server_id
+            WHERE experiment_id = _experiment_id
             GROUP BY server_round
             ORDER BY n_clientes DESC, server_round DESC LIMIT 1
             ) t1);
