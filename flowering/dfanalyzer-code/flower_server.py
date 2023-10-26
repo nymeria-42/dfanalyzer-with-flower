@@ -836,7 +836,6 @@ class FlowerServer:
                 query = f"""SELECT check_if_last_round_is_already_recorded_fit({experiment_id},{fl_round})"""
                 cursor.execute(operation=query)
                 result = cursor.fetchone()
-                self.log_message(f"RESULT={result}", "INFO")
 
                 if result:
                     result = result[-1]
@@ -987,8 +986,6 @@ class FlowerServer:
                 cursor.execute(operation=query)
                 result = cursor.fetchone()
                 
-                self.log_message(f"RESULT EVALUATION={result}", "INFO")
-
                 if result:
                     result = result[-1]
                 tries += 1

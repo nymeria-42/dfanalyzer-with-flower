@@ -11,8 +11,8 @@ conn = pymonetdb.connect(database='dataflow_analyzer', port=50000, username='mon
 cursor = conn.cursor()
 
 # Create a function to retrieve data from the database
-def fetch_data(table = 'oservertrainingaggregation', server_id=0):
-    cursor.execute(f'SELECT * FROM {table} WHERE server_id={server_id}')  # Modify to your table name and SQL query
+def fetch_data(table = 'oservertrainingaggregation', experiment_id=0):
+    cursor.execute(f'SELECT * FROM {table} WHERE experiment_id={experiment_id}')  # Modify to your table name and SQL query
 
     data = cursor.fetchall()
     columns = [desc[0] for desc in cursor.description]
@@ -35,14 +35,14 @@ st.sidebar.subheader('Select Attributes to Plot')
 
 selected_table = st.sidebar.selectbox('Select table:', tables, index=0)
 
-def get_server_ids():
-    cursor.execute(f'SELECT DISTINCT server_id FROM iserverconfig')
+def get_experiment_ids():
+    cursor.execute(f'SELECT DISTINCT experiment_id FROM iserverconfig')
     data = cursor.fetchall()
-    server_ids = [int(row[0]) for row in data]
-    return server_ids
+    experiment_ids = [int(row[0]) for row in data]
+    return experiment_ids
 
-selected_server_id = st.sidebar.selectbox('Select server ID:', get_server_ids())
-data_df = fetch_data(selected_table, selected_server_id)
+selected_experiment_id = st.sidebar.selectbox('Select experiment ID:', get_experiment_ids())
+data_df = fetch_data(selected_table, selected_experiment_id)
 
 
 selected_column = st.sidebar.selectbox('Select column:', data_df.columns, index=8)
