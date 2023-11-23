@@ -37,6 +37,7 @@ class FlowerServer:
     def __init__(self, experiment_id: int, server_config_file: Path) -> None:
         # Server's ID and Config File.
         self.experiment_id = experiment_id
+        self.server_id = None
         self.server_config_file = server_config_file
         # Server's Config File Settings.
         self.general_settings = None
@@ -153,8 +154,10 @@ class FlowerServer:
         conn.commit()
 
         max_experiment_id = cursor.fetchone()[0]
+        self.server_id = 0
 
         if max_experiment_id != None:
+            
             self.experiment_id = max_experiment_id + 1
 
             cursor.execute(f"SELECT check_ending_fl({self.experiment_id - 1});")
@@ -163,6 +166,10 @@ class FlowerServer:
             ending_fl = cursor.fetchone()[0]
 
             if ending_fl == False:
+                cursor.execute(f"SELECT check_max_server_id({self.experiment_id-1});")
+                conn.commit()
+                server_id = cursor.fetchone()[0]
+                self.server_id = server_id + 1
                 cursor.execute(f"SELECT check_last_round_fl({self.experiment_id - 1});")
                 conn.commit()
                 last_round = cursor.fetchone()[0]
@@ -174,6 +181,12 @@ class FlowerServer:
             conn.close()
         else:
             self.experiment_id = 0
+
+        attributes = [
+            "action",
+            "min_clients_per_checkpoint"
+        ]
+        to_dfanalyzer = [checkpoints_settings.get(attr, None) for attr in attributes]
 
         attributes = [
             "num_rounds",
@@ -189,7 +202,9 @@ class FlowerServer:
             "min_available_clients",
         ]
 
-        to_dfanalyzer = [fl_settings.get(attr, None) for attr in attributes]
+        to_dfanalyzer += [fl_settings.get(attr, None) for attr in attributes]
+
+
         t1 = Task(1, dataflow_tag, "ServerConfig")
 
         t1.begin()
@@ -211,6 +226,7 @@ class FlowerServer:
                 Element(
                     [
                         self.experiment_id,
+                        self.server_id,
                         str(grpc_settings["grpc_listen_ip_address"])
                         + str(grpc_settings["grpc_listen_port"]),
                         grpc_settings["grpc_max_message_length_in_bytes"],
@@ -345,23 +361,21 @@ class FlowerServer:
         t2.begin()
 
         params = None
-        if self.experiment_id != 0:
+        if self.server_id != 0:
 
             connection = self.get_connection_monetdb()
             cursor = connection.cursor()
-            cursor.execute(f"SELECT check_ending_fl({self.experiment_id-1});")
+            cursor.execute(f"SELECT check_ending_fl({self.experiment_id});")
             connection.commit()
             ending_fl = cursor.fetchone()[0]
 
             if ending_fl == False:
-                cursor.execute(f"SELECT check_last_round_fl({self.experiment_id-1});")
+                cursor.execute(f"SELECT check_last_round_fl({self.experiment_id});")
 
                 connection.commit()
                 last_round = cursor.fetchone()[0]
-
-
                 db = self.get_connection_mongodb()
-                pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"experiment_id": {"$eq": self.experiment_id - 1}}]})
+                pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"experiment_id": {"$eq": self.experiment_id}}]})
                 params = pickle.loads(pesos["global_weights"])
             cursor.close()
             connection.close()
@@ -369,7 +383,7 @@ class FlowerServer:
         ending_time = time.ctime()
         loading_parameters_end = perf_counter() - loading_parameters_start
 
-        to_dfanalyzer = [self.get_attribute("experiment_id"), starting_time, ending_time, loading_parameters_end]
+        to_dfanalyzer = [self.get_attribute("experiment_id"), self.get_attribute("server_id"), starting_time, ending_time, loading_parameters_end]
         t2_input = DataSet("iLoadGlobalWeights", [Element(to_dfanalyzer)])
         t2.add_dataset(t2_input)
         to_dfanalyzer = [bool(params)]
@@ -383,7 +397,7 @@ class FlowerServer:
         training_hyper_parameters_settings = self.get_attribute(
             "training_hyper_parameters_settings"
         )
-        fit_config = {"fl_round": 0}
+        fit_config = {"fl_round": 0, "server_id": 0}
         fit_config.update(training_hyper_parameters_settings)
         # Log the Initial Training Configuration (If Logger is Enabled for "DEBUG" Level).
         message = "[Server {0} | FL Round {1}] Initial Fit Config: {2}".format(
@@ -394,7 +408,7 @@ class FlowerServer:
 
     def load_initial_evaluate_config(self) -> dict:
         testing_hyper_parameters_settings = self.get_attribute("testing_hyper_parameters_settings")
-        evaluate_config = {"fl_round": 0}
+        evaluate_config = {"fl_round": 0, "server_id": 0}
         evaluate_config.update(testing_hyper_parameters_settings)
         # Log the Initial Testing Configuration (If Logger is Enabled for "DEBUG" Level).
         message = "[Server {0} | FL Round {1}] Initial Evaluate Config: {2}".format(
@@ -477,7 +491,7 @@ class FlowerServer:
         tries = 0
         fl_round = self.get_attribute("fl_round")
         while not result:
-            query = f"""SELECT check_if_last_round_is_already_recorded({self.experiment_id},{fl_round})"""
+            query = f"""SELECT check_if_last_round_is_already_recorded({self.experiment_id},{self.server_id},{fl_round})"""
             cursor.execute(operation=query)
             result = cursor.fetchone()
 
@@ -617,7 +631,7 @@ class FlowerServer:
         # Get the Training Configuration.
         fit_config = self.get_attribute("fit_config")
         # Update the Training Configuration's Current FL Round.
-        fit_config.update({"fl_round": self.get_attribute("fl_round")})
+        fit_config.update({"fl_round": self.get_attribute("fl_round"), "experiment_id": self.get_attribute("experiment_id"), "server_id": self.get_attribute("server_id")})
         # Dynamically Adjust the Training Configuration's Hyper-parameters (If Enabled and Eligible).
         dynamically_adjusted = False
         if self.is_enabled_hyper_parameters_dynamic_adjustment("train"):
@@ -675,6 +689,7 @@ class FlowerServer:
 
         to_dfanalyzer = [
             self.get_attribute("experiment_id"),
+            self.get_attribute("server_id"),
             fl_round,
             starting_time,
             time.ctime(),
@@ -685,7 +700,7 @@ class FlowerServer:
         t8.add_dataset(t8_input)
         t8_output = DataSet(
             "oTrainingConfig",
-            [Element([self.get_attribute("experiment_id"), fl_round, dynamically_adjusted])],
+            [Element([self.get_attribute("experiment_id"), self.get_attribute("server_id"), fl_round, dynamically_adjusted])],
         )
         t8.add_dataset(t8_output)
         t8.end()
@@ -718,7 +733,7 @@ class FlowerServer:
         # Get the Testing Configuration.
         evaluate_config = self.get_attribute("evaluate_config")
         # Update the Testing Configuration's Current FL Round.
-        evaluate_config.update({"fl_round": self.get_attribute("fl_round"), "experiment_id": self.get_attribute("experiment_id")})
+        evaluate_config.update({"fl_round": self.get_attribute("fl_round"), "experiment_id": self.get_attribute("experiment_id"), "server_id": self.get_attribute("server_id")})
         # Dynamically Adjust the Testing Configuration's Hyper-parameters (If Enabled and Eligible).
         if self.is_enabled_hyper_parameters_dynamic_adjustment("test"):
             if self.is_fl_round_eligible_for_hyper_parameters_dynamic_adjustment("test"):
@@ -744,7 +759,7 @@ class FlowerServer:
         )
         t11.begin()
         attributes = ["batch_size", "steps"]
-        to_dfanalyzer = [self.get_attribute("experiment_id")] + [evaluate_config.get(attr, 0) for attr in attributes]
+        to_dfanalyzer = [self.get_attribute("experiment_id"), self.get_attribute("server_id")] + [evaluate_config.get(attr, 0) for attr in attributes]
 
         t11_input = DataSet("iEvaluationConfig", [Element(to_dfanalyzer)])
         t11.add_dataset(t11_input)
@@ -828,12 +843,13 @@ class FlowerServer:
 
         fl_round = self.get_attribute("fl_round")
         experiment_id = self.get_attribute("experiment_id")
+        server_id = self.get_attribute("server_id")
         client_loss = None
         if fl_round > 1:
             result = None
             tries = 0
             while not result:
-                query = f"""SELECT check_if_last_round_is_already_recorded_fit({experiment_id},{fl_round})"""
+                query = f"""SELECT check_if_last_round_is_already_recorded_fit({experiment_id}, {server_id}, {fl_round})"""
                 cursor.execute(operation=query)
                 result = cursor.fetchone()
 
@@ -843,7 +859,7 @@ class FlowerServer:
                 time.sleep(0.05)
 
             if result:
-                query = f"""SELECT check_client_loss_fit({experiment_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
+                query = f"""SELECT check_client_loss_fit({experiment_id}, {server_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
                 cursor.execute(operation=query)
                 client_loss = bool(cursor.fetchone()[0])
             cursor.close()
@@ -852,6 +868,7 @@ class FlowerServer:
         checkpoints = {
             "round": self.get_attribute("fl_round"),
             "experiment_id": self.get_attribute("experiment_id"),
+            "server_id": self.get_attribute("server_id"),
             "global_weights": Binary(pickle.dumps(self.global_model_parameters, protocol=4)),
         }
 
@@ -861,6 +878,7 @@ class FlowerServer:
         insertion_time = perf_counter() - starting_time
         to_dfanalyzer = [
             self.get_attribute("experiment_id"),
+            self.get_attribute("server_id"),
             self.get_attribute("fl_round"),
             total_num_clients,
             client_loss,
@@ -884,7 +902,7 @@ class FlowerServer:
             connection = self.get_connection_monetdb()
 
             cursor = connection.cursor()
-            query = f"""SELECT get_last_round_with_all_clients_evaluation({experiment_id})"""
+            query = f"""SELECT get_last_round_with_all_clients_evaluation({experiment_id}, {server_id})"""
             cursor.execute(operation=query)
             last_round = int(cursor.fetchone()[0])
             if fl_round != (last_round+1):
@@ -894,7 +912,7 @@ class FlowerServer:
                 
                 if not client_loss:
                     db = self.get_connection_mongodb()
-                    pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"experiment_id": {"$eq": experiment_id}}]})
+                    pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"experiment_id": {"$eq": experiment_id}}, {"server_id": {"$eq": server_id}}]})
                     params = pickle.loads(pesos["global_weights"])
                     if params: 
                         message = f"ROLLBACK! Using weights from round {last_round} in round {fl_round}"
@@ -977,12 +995,13 @@ class FlowerServer:
 
         fl_round = self.get_attribute("fl_round")
         experiment_id = self.get_attribute("experiment_id")
+        server_id = self.get_attribute("server_id")
         client_loss = None
         if fl_round > 1:
             result = None
             tries = 0
             while not result:
-                query = f"""SELECT check_if_last_round_is_already_recorded_evaluation({experiment_id},{fl_round})"""
+                query = f"""SELECT check_if_last_round_is_already_recorded_evaluation({experiment_id}, {server_id}, {fl_round})"""
                 cursor.execute(operation=query)
                 result = cursor.fetchone()
                 
@@ -992,7 +1011,7 @@ class FlowerServer:
                 time.sleep(0.05)
 
             if result:
-                query = f"""SELECT check_client_loss_evaluation({experiment_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
+                query = f"""SELECT check_client_loss_evaluation({experiment_id}, {server_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
                 cursor.execute(operation=query)
                 client_loss = bool(cursor.fetchone()[0])
             cursor.close()
@@ -1000,6 +1019,7 @@ class FlowerServer:
 
         to_dfanalyzer = [
             self.get_attribute("experiment_id"),
+            self.get_attribute("server_id"),
             self.get_attribute("fl_round"),
             client_loss,
             total_num_clients,
@@ -1020,7 +1040,7 @@ class FlowerServer:
 
             cursor = connection.cursor()
 
-            query = f"""SELECT get_last_round_with_all_clients_fit({experiment_id})"""
+            query = f"""SELECT get_last_round_with_all_clients_fit({experiment_id}, {server_id})"""
             cursor.execute(operation=query)
             last_round = int(cursor.fetchone()[0])
             if fl_round != last_round:
@@ -1030,7 +1050,7 @@ class FlowerServer:
                 
                 if not client_loss:
                     db = self.get_connection_mongodb()
-                    pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"experiment_id": {"$eq": experiment_id}}]})
+                    pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"experiment_id": {"$eq": experiment_id}}, {"server_id": {"$eq": server_id}}]})
                     params = pickle.loads(pesos["global_weights"])
                     if params: 
                         message = f"ROLLBACK! Using weights from round {last_round} in round {fl_round}"

@@ -99,6 +99,7 @@ class Client(NumPyClient):
         self.model.set_weights(global_model_current_parameters)
         if fit_config["fl_round"] <= 2:
             _experiment_id = fit_config["experiment_id"]
+            _server_id = fit_config["server_id"]
             connection = connect(
                 hostname=monetdb_settings["hostname"],
                 port=monetdb_settings["port"],
@@ -111,6 +112,9 @@ class Client(NumPyClient):
             try:
                 for table in tables:
                     query = f"""UPDATE ds_{table} SET experiment_id = {_experiment_id} WHERE experiment_id = -1"""
+                    cursor.execute(operation=query)
+                    connection.commit()
+                    query = f"""UPDATE ds_{table} SET server_id = {_server_id} WHERE server_id = -1"""
                     cursor.execute(operation=query)
                     connection.commit()
             except:
@@ -136,8 +140,9 @@ class Client(NumPyClient):
             tries = 0
             fl_round = fit_config["fl_round"]
             experiment_id = fit_config["experiment_id"]
+            server_id = fit_config["server_id"]
             while tries < 50 and not result:
-                query = f"""SELECT check_if_last_round_is_already_recorded({experiment_id},{fl_round})"""
+                query = f"""SELECT check_if_last_round_is_already_recorded({experiment_id},{server_id},{fl_round})"""
                 cursor.execute(operation=query)
                 connection.commit()
                 result = cursor.fetchone()
@@ -148,7 +153,7 @@ class Client(NumPyClient):
                 time.sleep(0.05)
 
             if result:
-                query = f"""SELECT get_client_last_round({experiment_id}, {self.client_id})"""
+                query = f"""SELECT get_client_last_round({experiment_id}, {server_id}, {self.client_id})"""
                 cursor.execute(operation=query)
                 round = cursor.fetchone()[0]
                 if round:
@@ -248,6 +253,7 @@ class Client(NumPyClient):
 
         to_dfanalyzer = [
             fit_config["experiment_id"],
+            fit_config["server_id"],
             self.client_id,
             fit_config["fl_round"],
             fit_time_end,
@@ -282,8 +288,9 @@ class Client(NumPyClient):
         tries = 0
         fl_round = fit_config["fl_round"]
         experiment_id = fit_config["experiment_id"]
+        server_id = fit_config["server_id"]
         while not result:
-            query = f"""SELECT check_if_last_round_is_recorded_fit_client({experiment_id}, {fl_round}, {self.client_id})"""
+            query = f"""SELECT check_if_last_round_is_recorded_fit_client({experiment_id}, {server_id}, {fl_round}, {self.client_id})"""
             cursor.execute(operation=query)
             connection.commit()
             result = cursor.fetchone()
@@ -359,6 +366,7 @@ class Client(NumPyClient):
 
         to_dfanalyzer = [
             evaluate_config["experiment_id"],
+            evaluate_config["server_id"],
             self.client_id,
             evaluate_config["fl_round"],
             testing_metrics["loss"],
@@ -393,9 +401,11 @@ class Client(NumPyClient):
         tries = 0
         fl_round = evaluate_config["fl_round"]
         experiment_id = evaluate_config["experiment_id"]
+        server_id = evaluate_config["server_id"]
+
 
         while not result:
-            query = f"""SELECT check_if_last_round_is_recorded_evaluation_client({experiment_id},{fl_round}, {self.client_id})"""
+            query = f"""SELECT check_if_last_round_is_recorded_evaluation_client({experiment_id},{server_id},{fl_round}, {self.client_id})"""
             cursor.execute(operation=query)
             connection.commit()
             result = cursor.fetchone()
@@ -667,7 +677,7 @@ class FlowerClient:
             "jit_compile",
         ]
 
-        to_dfanalyzer = [-1]
+        to_dfanalyzer = [-1, -1]
         to_dfanalyzer += [ml_model_settings.get(attr, 0) for attr in attributes]
 
         if ml_model_settings["model"] == "MobileNetV2":
@@ -726,7 +736,7 @@ class FlowerClient:
         ml_model_optimizer = None
         t6 = Task(6, dataflow_tag, "OptimizerConfig")
         t6.begin()
-        to_dfanalyzer = [-1]
+        to_dfanalyzer = [-1, -1]
         if ml_model_settings["optimizer"] == "SGD":
             # Parse 'SGD Settings'.
             sgd_settings = self.parse_config_section(cp, "SGD Settings")
@@ -761,7 +771,7 @@ class FlowerClient:
         ml_model_loss_function = None
         t7 = Task(7, dataflow_tag, "LossConfig")
         t7.begin()
-        to_dfanalyzer = [-1]
+        to_dfanalyzer = [-1, -1]
         if ml_model_settings["loss_function"] == "SparseCategoricalCrossentropy":
             # Parse 'SparseCategoricalCrossentropy Settings'.
             scc_settings = self.parse_config_section(cp, "SparseCategoricalCrossentropy Settings")
@@ -911,7 +921,7 @@ def main() -> None:
     fc.load_ml_model_private_dataset()
 
     end = perf_counter()
-    to_dfanalyzer = [-1, client_id, end - start]
+    to_dfanalyzer = [-1, -1, client_id, end - start]
     t4_input = DataSet("iDatasetLoad", [Element(to_dfanalyzer)])
     t4.add_dataset(t4_input)
     t4_output = DataSet("oDatasetLoad", [Element([])])
