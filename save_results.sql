@@ -43,9 +43,9 @@ COPY (
         iloadglobalweights as ilw
     JOIN 
         oloadglobalweights as olw
-        ON ilgp.id = olgp.id 
+        ON ilw.id = olw.id 
     JOIN iserverconfig as sc
-        on sc.server_id = ilgp.server_id)
+        on sc.server_id = ilw.server_id)
 INTO 'load_weights.csv' ON CLIENT USING DELIMITERS ',', '\n', '"';
 
 COPY (
