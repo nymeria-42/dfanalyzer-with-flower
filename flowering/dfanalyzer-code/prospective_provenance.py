@@ -404,7 +404,7 @@ df.save()
 
 tries = 0
 
-while tries <=10:
+while True:
     try:
         conn = pymonetdb.connect(
             hostname=monetdb_settings["hostname"],
