@@ -655,6 +655,23 @@ while True:
         END;"""
         )
 
+        # cursor.execute(
+        #     """
+        # CREATE OR REPLACE FUNCTION get_client_count_last_checkpoint (_experiment_id int, _server_id int, _client_id int, _checkpoint_frequency int, _server_round int)
+        # RETURNS int
+        # BEGIN
+        #     RETURN
+        #     (SELECT
+        #         COUNT(server_round)
+        #     FROM 
+        #         oClientTraining ct
+        #     WHERE ct.client_id = _client_id
+        #         AND ct.experiment_id=_experiment_id
+        #         AND ct.server_id = _server_id
+        #         AND ct.server_round >= _server_round - _checkpoint_frequency);
+        # END;"""
+        # )
+
         cursor.execute(
             """
         CREATE OR REPLACE FUNCTION get_last_round_with_all_clients_fit (_experiment_id int, _server_id int)
@@ -671,6 +688,23 @@ while True:
         END;"""
         )
 
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION get_total_clients (_experiment_id int, _server_id int, _fl_round int, _checkpoint_frequency int)
+        RETURNS int
+        BEGIN
+            RETURN
+           ( SELECT
+                MIN(sta.total_num_clients)
+            FROM 
+               oservertrainingaggregation sta
+            WHERE sta.experiment_id=_experiment_id 
+            AND sta.server_id = _server_id
+            AND sta.server_round BETWEEN (_fl_round - _checkpoint_frequency) AND _fl_round);
+        END;"""
+        )
+
+        
         cursor.execute(
             """
         CREATE OR REPLACE FUNCTION get_last_round_with_all_clients_evaluation (_experiment_id int, _server_id int)
@@ -717,6 +751,22 @@ while True:
                 WHERE ct.server_round =  _server_round
                     AND ct.experiment_id = _experiment_id
                     AND ct.server_id = _server_id);
+        END;"""
+        )
+
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION check_server_recorded(_experiment_id int, _server_id int, _server_round int) 
+        RETURNS int 
+        BEGIN 
+            RETURN
+                (SELECT 
+                    COUNT(*)
+                FROM 
+                    oServerTrainingAggregation
+                WHERE server_round =  _server_round
+                    AND experiment_id = _experiment_id
+                    AND server_id = _server_id);
         END;"""
         )
 
@@ -784,6 +834,16 @@ while True:
             GROUP BY server_round
             ORDER BY n_clientes DESC, server_round DESC LIMIT 1
             ) t1);
+        END;"""
+        )
+
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION get_num_checkpoints(_experiment_id int) 
+        RETURNS int 
+        BEGIN 
+            RETURN
+                (SELECT COUNT(id) FROM oservertrainingaggregation WHERE experiment_id =_experiment_id and weights_mongo_id <> 'None');
         END;"""
         )
 

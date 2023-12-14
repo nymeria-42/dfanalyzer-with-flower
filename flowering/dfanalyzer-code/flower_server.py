@@ -170,18 +170,24 @@ class FlowerServer:
                 conn.commit()
                 server_id = cursor.fetchone()[0]
                 self.server_id = server_id + 1
-                cursor.execute(f"SELECT check_last_round_fl({self.experiment_id - 1});")
-                conn.commit()
-                last_round = cursor.fetchone()[0]
-
-                if last_round:
-                    fl_settings["num_rounds"] -= last_round
+                # cursor.execute(f"SELECT check_last_round_fl({self.experiment_id - 1});")
+                # conn.commit()
+                # last_round = cursor.fetchone()[0]
+                db = self.get_connection_mongodb()
+                result = list(db.checkpoints.find({"experiment_id": {"$eq": self.experiment_id-1}}).sort([("round", -1), ("server_id", - 1)]).limit(1))
+                if result:
+                    cursor.execute(f"SELECT get_num_checkpoints({self.experiment_id-1})")
+                    # get count for checkpoints saved to mongodb and multiply by checkpoints_frequency to get the last round 
+                    num_checkpoints = cursor.fetchone()[0]
+                    num_rounds = num_checkpoints * int(checkpoints_settings["checkpoint_frequency"])
+                    fl_settings["num_rounds"] -= int(num_rounds)
                 self.experiment_id -=1
-            cursor.close()
-            conn.close()
         else:
             self.experiment_id = 0
 
+        cursor.close()
+        conn.close()
+        
         attributes = [
             "action",
             "min_clients_per_checkpoint"
@@ -370,13 +376,30 @@ class FlowerServer:
             ending_fl = cursor.fetchone()[0]
 
             if ending_fl == False:
-                cursor.execute(f"SELECT check_last_round_fl({self.experiment_id});")
 
-                connection.commit()
-                last_round = cursor.fetchone()[0]
+                # cursor.execute(f"SELECT check_last_round_fl({self.experiment_id});")
+                # connection.commit()
                 db = self.get_connection_mongodb()
-                pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"experiment_id": {"$eq": self.experiment_id}}]})
-                params = pickle.loads(pesos["global_weights"])
+                # last_round = cursor.fetchone()[0]
+                # pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"experiment_id": {"$eq": self.experiment_id}}]})
+                pesos = list(db.checkpoints.find({"experiment_id": {"$eq": self.experiment_id}}).sort([("round", -1), ("server_id", - 1)]).limit(1))
+                if pesos:
+                    params = pickle.loads(pesos[0]["global_weights"])
+                    message = "[Server {0} | FL Round {1}] Loaded Global Weights from Server {2} - round {3}.".format(
+                        self.get_attribute("experiment_id"),
+                        self.get_attribute("fl_round"),
+                        self.server_id - 1,
+                        pesos[0]["round"],
+                    )
+                    self.log_message(message, "INFO")
+                else:
+                    message = "[Server {0} | FL Round {1}] No Global Weights Found for Server {2}.".format(
+                        self.get_attribute("experiment_id"),
+                        self.get_attribute("fl_round"),
+                        self.server_id - 1,
+                    )
+                    self.log_message(message, "INFO")
+
             cursor.close()
             connection.close()
 
@@ -494,6 +517,7 @@ class FlowerServer:
             query = f"""SELECT check_if_last_round_is_already_recorded({self.experiment_id},{self.server_id},{fl_round})"""
             cursor.execute(operation=query)
             result = cursor.fetchone()
+            connection.commit()
 
             if result:
                 result = result[-1]
@@ -715,9 +739,16 @@ class FlowerServer:
             "password": self.monetdb_settings["password"],
             "database": self.monetdb_settings["database"]}
         
-        fit_config.update({'action': self.checkpoints_settings["action"], "experiment_id": self.get_attribute("experiment_id"), "monetdb_hostname": monetdb["hostname"],
-                           "monetdb_port": monetdb["port"], "monetdb_username": monetdb["username"], "monetdb_password": monetdb["password"], "monetdb_database": monetdb["database"],
-                           "mongodb_hostname": mongodb["hostname"], "mongodb_port": mongodb["port"]})
+        fit_config.update({"action": self.checkpoints_settings["action"], 
+                           "checkpoint_frequency": self.checkpoints_settings["checkpoint_frequency"],
+                           "experiment_id": self.get_attribute("experiment_id"), 
+                           "monetdb_hostname": monetdb["hostname"],
+                           "monetdb_port": monetdb["port"], 
+                           "monetdb_username": monetdb["username"], 
+                           "monetdb_password": monetdb["password"], 
+                           "monetdb_database": monetdb["database"],
+                           "mongodb_hostname": mongodb["hostname"], 
+                           "mongodb_port": mongodb["port"]})
         # Return the Training Configuration to be Sent to All Participating Clients.
         return fit_config
 
@@ -777,9 +808,16 @@ class FlowerServer:
             "password": self.monetdb_settings["password"],
             "database": self.monetdb_settings["database"]}
         
-        evaluate_config.update({'action': self.checkpoints_settings["action"], "experiment_id": self.get_attribute("experiment_id"), "monetdb_hostname": monetdb["hostname"],
-                           "monetdb_port": monetdb["port"], "monetdb_username": monetdb["username"], "monetdb_password": monetdb["password"], "monetdb_database": monetdb["database"],
-                           "mongodb_hostname": mongodb["hostname"], "mongodb_port": mongodb["port"]})
+        evaluate_config.update({'action': self.checkpoints_settings["action"], 
+                                "checkpoint_frequency": self.checkpoints_settings["checkpoint_frequency"],
+                                "experiment_id": self.get_attribute("experiment_id"), 
+                                "monetdb_hostname": monetdb["hostname"],
+                                "monetdb_port": monetdb["port"], 
+                                "monetdb_username": monetdb["username"], 
+                                "monetdb_password": monetdb["password"], 
+                                "monetdb_database": monetdb["database"],
+                                "mongodb_hostname": mongodb["hostname"], 
+                                "mongodb_port": mongodb["port"]})
 
         # Return the Testing Configuration to be Sent to All Participating Clients.
         return evaluate_config
@@ -837,45 +875,54 @@ class FlowerServer:
         self.log_message(message, "INFO")
         
         ### Check client loss
-        connection = self.get_connection_monetdb()
-
-        cursor = connection.cursor()
 
         fl_round = self.get_attribute("fl_round")
         experiment_id = self.get_attribute("experiment_id")
         server_id = self.get_attribute("server_id")
         client_loss = None
-        if fl_round > 1:
-            result = None
-            tries = 0
-            while not result:
-                query = f"""SELECT check_if_last_round_is_already_recorded_fit({experiment_id}, {server_id}, {fl_round})"""
-                cursor.execute(operation=query)
-                result = cursor.fetchone()
+        mongo_id = None
+        insertion_time = None
+        if (fl_round%int(self.checkpoints_settings["checkpoint_frequency"]) == 0):
+            message = f"Checking for client loss in round {fl_round}"
+            self.log_message(message, "INFO")
+            connection = self.get_connection_monetdb()
+            cursor = connection.cursor()
+            if fl_round > 1:
+                result = None
+                tries = 0
+                while not result:
+                    query = f"""SELECT check_if_last_round_is_already_recorded_fit({experiment_id}, {server_id}, {fl_round})"""
+                    cursor.execute(operation=query)
+                    result = cursor.fetchone()
+                    connection.commit()
+
+                    if result:
+                        result = result[-1]
+                    tries += 1
+                    time.sleep(0.05)
 
                 if result:
-                    result = result[-1]
-                tries += 1
-                time.sleep(0.05)
-
-            if result:
-                query = f"""SELECT check_client_loss_fit({experiment_id}, {server_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
-                cursor.execute(operation=query)
-                client_loss = bool(cursor.fetchone()[0])
+                    query = f"""SELECT check_client_loss_fit({experiment_id}, {server_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
+                    cursor.execute(operation=query)
+                    client_loss = bool(cursor.fetchone()[0])
             cursor.close()
             connection.close()
 
-        checkpoints = {
-            "round": self.get_attribute("fl_round"),
-            "experiment_id": self.get_attribute("experiment_id"),
-            "server_id": self.get_attribute("server_id"),
-            "global_weights": Binary(pickle.dumps(self.global_model_parameters, protocol=4)),
-        }
+            message = f"Inserting checkpoint for round {fl_round}"
+            self.log_message(message, "INFO")
+            checkpoints = {
+                "round": self.get_attribute("fl_round"),
+                "experiment_id": self.get_attribute("experiment_id"),
+                "server_id": self.get_attribute("server_id"),
+                "global_weights": Binary(pickle.dumps(self.global_model_parameters, protocol=4)),
+            }
 
-        starting_time = perf_counter()
-        db = self.get_connection_mongodb()
-        _id = db.checkpoints.insert_one(checkpoints)
-        insertion_time = perf_counter() - starting_time
+            starting_time = perf_counter()
+            db = self.get_connection_mongodb()
+            _id = db.checkpoints.insert_one(checkpoints)
+            mongo_id = _id.inserted_id
+            insertion_time = perf_counter() - starting_time
+        
         to_dfanalyzer = [
             self.get_attribute("experiment_id"),
             self.get_attribute("server_id"),
@@ -887,7 +934,7 @@ class FlowerServer:
             aggregated_metrics["loss"],
             aggregated_metrics["val_sparse_categorical_accuracy"],
             aggregated_metrics["val_loss"],
-            _id.inserted_id,
+            mongo_id,
             insertion_time,
             aggregated_metrics["fit_time"],
             starting_time,
@@ -898,24 +945,42 @@ class FlowerServer:
         t10.add_dataset(t10_output)
         t10.end()
 
-        if fl_round > 2 and self.checkpoints_settings["action"]=="rollback":
-            connection = self.get_connection_monetdb()
+        result = None
+        connection = self.get_connection_monetdb()
 
+        if fl_round > 2 and self.checkpoints_settings["action"]=="rollback" and (fl_round%int(self.checkpoints_settings["checkpoint_frequency"]) == 0):
+            message = f"Checking for rollback in round {fl_round}"
+            self.log_message(message, "INFO")
+            while not result:
+                cursor = connection.cursor()
+                query = f"""SELECT check_server_recorded({experiment_id}, {server_id}, {fl_round});"""
+                cursor.execute(operation=query)
+                connection.commit()
+                result = cursor.fetchone()
+            
+                if result:
+                    result = result[0]
+                time.sleep(0.05)
+            connection = self.get_connection_monetdb()
             cursor = connection.cursor()
-            query = f"""SELECT get_last_round_with_all_clients_evaluation({experiment_id}, {server_id})"""
+                        
+            query = f"""SELECT get_last_round_with_all_clients_fit({experiment_id}, {server_id})"""
             cursor.execute(operation=query)
             last_round = int(cursor.fetchone()[0])
-            if fl_round != (last_round+1):
+            if fl_round != (last_round):
                 # query = f"""SELECT check_client_loss_fit({experiment_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
                 # cursor.execute(operation=query)
                 # client_loss = bool(cursor.fetchone()[0])
                 
                 if not client_loss:
                     db = self.get_connection_mongodb()
-                    pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"experiment_id": {"$eq": experiment_id}}, {"server_id": {"$eq": server_id}}]})
-                    params = pickle.loads(pesos["global_weights"])
-                    if params: 
-                        message = f"ROLLBACK! Using weights from round {last_round} in round {fl_round}"
+                    # pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"experiment_id": {"$eq": experiment_id}}, {"server_id": {"$eq": server_id}}]})
+                    pesos = list(db.checkpoints.find({"$and": [{"experiment_id": {"$eq": experiment_id}}, {"server_id": {"$eq": server_id}}]}).sort([("round", -1)]).limit(1))
+                    if pesos: 
+                        # params = pickle.loads([p for p in pesos][0]["global_weights"])
+                        params = pickle.loads(pesos[0]["global_weights"])
+
+                        message = f"ROLLBACK! Using weights from round {pesos['round']} in round {fl_round}"
                         self.log_message(message, "INFO")
                         self.set_attribute(
                             "global_model_parameters",
@@ -990,32 +1055,34 @@ class FlowerServer:
         self.log_message(message, "INFO")
 
         ### Check client loss
-        connection = self.get_connection_monetdb()
-        cursor = connection.cursor()
-
         fl_round = self.get_attribute("fl_round")
         experiment_id = self.get_attribute("experiment_id")
         server_id = self.get_attribute("server_id")
         client_loss = None
-        if fl_round > 1:
-            result = None
-            tries = 0
-            while not result:
-                query = f"""SELECT check_if_last_round_is_already_recorded_evaluation({experiment_id}, {server_id}, {fl_round})"""
-                cursor.execute(operation=query)
-                result = cursor.fetchone()
-                
-                if result:
-                    result = result[-1]
-                tries += 1
-                time.sleep(0.05)
+        # if (fl_round%int(self.checkpoints_settings["checkpoint_frequency"]) == 0):
+        #     message = f"Checking client loss in round {fl_round}"
+        #     self.log_message(message, "INFO")
+        #     connection = self.get_connection_monetdb()
+        #     cursor = connection.cursor()
+        #     if fl_round > 1:
+        #         result = None
+        #         tries = 0
+        #         while not result:
+        #             query = f"""SELECT check_if_last_round_is_already_recorded_evaluation({experiment_id}, {server_id}, {fl_round})"""
+        #             cursor.execute(operation=query)
+        #             result = cursor.fetchone()
+                    
+        #             if result:
+        #                 result = result[-1]
+        #             tries += 1
+        #             time.sleep(0.05)
 
-            if result:
-                query = f"""SELECT check_client_loss_evaluation({experiment_id}, {server_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
-                cursor.execute(operation=query)
-                client_loss = bool(cursor.fetchone()[0])
-            cursor.close()
-            connection.close()
+        #         if result:
+        #             query = f"""SELECT check_client_loss_evaluation({experiment_id}, {server_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
+        #             cursor.execute(operation=query)
+        #             client_loss = bool(cursor.fetchone()[0])
+        #         cursor.close()
+        #         connection.close()
 
         to_dfanalyzer = [
             self.get_attribute("experiment_id"),
@@ -1035,41 +1102,43 @@ class FlowerServer:
         t13.add_dataset(t13_output)
         t13.end()
 
-        if fl_round > 2 and self.checkpoints_settings["action"]=="rollback":
-            connection = self.get_connection_monetdb()
+        # if fl_round > 2 and self.checkpoints_settings["action"]=="rollback" and (fl_round%int(self.checkpoints_settings["checkpoint_frequency"]) == 0):
+        #     message = f"Checking for rollback in round {fl_round}"
+        #     self.log_message(message, "INFO")
+        #     connection = self.get_connection_monetdb()
+        #     cursor = connection.cursor()
 
-            cursor = connection.cursor()
-
-            query = f"""SELECT get_last_round_with_all_clients_fit({experiment_id}, {server_id})"""
-            cursor.execute(operation=query)
-            last_round = int(cursor.fetchone()[0])
-            if fl_round != last_round:
-                # query = f"""SELECT check_client_loss_fit({experiment_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
-                # cursor.execute(operation=query)
-                # client_loss = bool(cursor.fetchone()[0])
+        #     query = f"""SELECT get_last_round_with_all_clients_fit({experiment_id}, {server_id})"""
+        #     cursor.execute(operation=query)
+        #     last_round = int(cursor.fetchone()[0])
+        #     if fl_round != last_round:
+        #         # query = f"""SELECT check_client_loss_fit({experiment_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
+        #         # cursor.execute(operation=query)
+        #         # client_loss = bool(cursor.fetchone()[0])
                 
-                if not client_loss:
-                    db = self.get_connection_mongodb()
-                    pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"experiment_id": {"$eq": experiment_id}}, {"server_id": {"$eq": server_id}}]})
-                    params = pickle.loads(pesos["global_weights"])
-                    if params: 
-                        message = f"ROLLBACK! Using weights from round {last_round} in round {fl_round}"
-                        self.log_message(message, "INFO")
-                        self.set_attribute(
-                            "global_model_parameters",
-                            params,
-                        )
+        #         if not client_loss:
+        #             db = self.get_connection_mongodb()
+        #             # pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"experiment_id": {"$eq": experiment_id}}, {"server_id": {"$eq": server_id}}]})
+        #             pesos = db.checkpoints.find({"$and": [{"experiment_id": {"$eq": experiment_id}}, {"server_id": {"$eq": server_id}}]}).sort([("round", -1)]).limit(1)
+        #             params = pickle.loads(pesos["global_weights"])
+        #             if params: 
+        #                 message = f"ROLLBACK! Using weights from round {pesos['round']} in round {fl_round}"
+        #                 self.log_message(message, "INFO")
+        #                 self.set_attribute(
+        #                     "global_model_parameters",
+        #                     params,
+        #                 )
 
-                    else:
-                        message = f"Couldn't find valid checkpoint for round {fl_round}"
-                        self.log_message(message, "INFO")
-                        last_round = None
-                else:
-                    message = f"Client missing in {fl_round}! Waiting return to execute rollback."
-                    self.log_message(message, "INFO")
+        #             else:
+        #                 message = f"Couldn't find valid checkpoint for round {fl_round}"
+        #                 self.log_message(message, "INFO")
+        #                 last_round = None
+        #         else:
+        #             message = f"Client missing in {fl_round}! Waiting return to execute rollback."
+        #             self.log_message(message, "INFO")
 
-            cursor.close()
-            connection.close()
+        #     cursor.close()
+        #     connection.close()
 
         # Return the Aggregated Testing Metrics.
         return aggregated_metrics

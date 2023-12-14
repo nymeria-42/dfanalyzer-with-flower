@@ -123,8 +123,8 @@ class Client(NumPyClient):
                 cursor.close()
                 connection.close()
 
-            
-        if fit_config["fl_round"] > 1 and fit_config["action"] == 'different_models':
+        checkpoint_frequency = int(fit_config["checkpoint_frequency"])
+        if fit_config["fl_round"] > 2 and fit_config["action"] == 'different_models':
 
             connection = connect(
                 hostname=monetdb_settings["hostname"],
@@ -155,17 +155,17 @@ class Client(NumPyClient):
             if result:
                 query = f"""SELECT get_client_last_round({experiment_id}, {server_id}, {self.client_id})"""
                 cursor.execute(operation=query)
-                round = cursor.fetchone()[0]
-                if round:
-                    last_round = int(cursor.fetchone()[0])
+                round = cursor.fetchone()
+                if round and round[0]:
+                    last_round = int(round[0])
                     cursor.close()
                     connection.close()
                     if fit_config["fl_round"] != (last_round+1):
                         db = self.get_connection_mongodb(mongodb_settings["hostname"], mongodb_settings["port"])
-                        pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"experiment_id": {"$eq": experiment_id}}]})
-                        params = pickle.loads(pesos["global_weights"])
-                        if params: 
-                            message = f"Loading client {self.client_id} with global weights from round {last_round}"
+                        pesos = list(db.checkpoints.find({"$and": [{"experiment_id": {"$eq": experiment_id}}, {"server_id": {"$eq": server_id}}]}).sort([("round", -1)]).limit(1))
+                        if pesos:
+                            params = pickle.loads(pesos[0]["global_weights"])
+                            message = f"Loading client {self.client_id} with global weights from round {pesos[0]['round']}"
                             self.log_message(message, "INFO")
                             self.model.set_weights(params)
                         else:
@@ -173,7 +173,7 @@ class Client(NumPyClient):
                             self.log_message(message, "INFO")
                             last_round = None
                 else:
-                    message = f"New client: client_id = {self.client_id}"
+                    message = f"Couldn't find valid checkpoint for client_id = {self.client_id}"
                     self.log_message(message, "INFO")
 
         # Replace All "None" String Values with None Type (Necessary Workaround on Flower v1.1.0).
@@ -272,33 +272,36 @@ class Client(NumPyClient):
         t8.add_dataset(t8_output)
         t8.end()
 
-        # if fit_config["fl_round"] > 1 and fit_config["action"] == 'rollback':
 
-        connection = connect(
-            hostname=monetdb_settings["hostname"],
-            port=monetdb_settings["port"],
-            username=monetdb_settings["username"],
-            password=monetdb_settings["password"],
-            database=monetdb_settings["database"],
-        )
-
-        cursor = connection.cursor()
 
         result = None
         tries = 0
         fl_round = fit_config["fl_round"]
         experiment_id = fit_config["experiment_id"]
         server_id = fit_config["server_id"]
-        while not result:
-            query = f"""SELECT check_if_last_round_is_recorded_fit_client({experiment_id}, {server_id}, {fl_round}, {self.client_id})"""
-            cursor.execute(operation=query)
-            connection.commit()
-            result = cursor.fetchone()
-            
-            if result:
-                result = result[-1]
-            tries += 1
-            time.sleep(0.05)
+        checkpoint_frequency = int(fit_config["checkpoint_frequency"])
+        if (fl_round%checkpoint_frequency == 0):
+            connection = connect(
+                hostname=monetdb_settings["hostname"],
+                port=monetdb_settings["port"],
+                username=monetdb_settings["username"],
+                password=monetdb_settings["password"],
+                database=monetdb_settings["database"],
+            )
+
+            cursor = connection.cursor()
+            message = f"Client {self.client_id} is waiting for round {fl_round} to be recorded"
+            self.log_message(message, "INFO")
+            while not result:
+                query = f"""SELECT check_if_last_round_is_recorded_fit_client({experiment_id}, {server_id}, {fl_round}, {self.client_id})"""
+                cursor.execute(operation=query)
+                connection.commit()
+                result = cursor.fetchone()
+                
+                if result:
+                    result = result[-1]
+                tries += 1
+                time.sleep(0.05)
 
         # Return the Model's Local Weights, Number of Training Examples, and Training Metrics to be Sent to the Server.
         return weight_tensors_list, num_training_examples, training_metrics
@@ -383,37 +386,38 @@ class Client(NumPyClient):
         testing_metrics.update({"evaluate_time": evaluate_time_end})
         # Get the Loss Metric.
         loss = testing_metrics["loss"]
-        monetdb_settings = { k.replace("monetdb_",""): v for k, v in evaluate_config.items() if 'monetdb' in k}
 
-        # if evaluate_config["fl_round"] > 1 and evaluate_config["action"] == 'rollback':
+        # result = None
+        # tries = 0
+        # fl_round = evaluate_config["fl_round"]
+        # experiment_id = evaluate_config["experiment_id"]
+        # server_id = evaluate_config["server_id"]
 
-        connection = connect(
-            hostname=monetdb_settings["hostname"],
-            port=monetdb_settings["port"],
-            username=monetdb_settings["username"],
-            password=monetdb_settings["password"],
-            database=monetdb_settings["database"],
-        )
+        # checkpoint_frequency = int(evaluate_config["checkpoint_frequency"])
+        # if (fl_round%checkpoint_frequency == 0):
+        #     monetdb_settings = { k.replace("monetdb_",""): v for k, v in evaluate_config.items() if 'monetdb' in k}
 
-        cursor = connection.cursor()
+        #     connection = connect(
+        #         hostname=monetdb_settings["hostname"],
+        #         port=monetdb_settings["port"],
+        #         username=monetdb_settings["username"],
+        #         password=monetdb_settings["password"],
+        #         database=monetdb_settings["database"],
+        #     )
 
-        result = None
-        tries = 0
-        fl_round = evaluate_config["fl_round"]
-        experiment_id = evaluate_config["experiment_id"]
-        server_id = evaluate_config["server_id"]
+        #     cursor = connection.cursor()
+        #     message = f"Client {self.client_id} is waiting for round {fl_round} to be recorded"
+        #     self.log_message(message, "INFO")
+        #     while not result:
+        #         query = f"""SELECT check_if_last_round_is_recorded_evaluation_client({experiment_id},{server_id},{fl_round}, {self.client_id})"""
+        #         cursor.execute(operation=query)
+        #         connection.commit()
+        #         result = cursor.fetchone()
 
-
-        while not result:
-            query = f"""SELECT check_if_last_round_is_recorded_evaluation_client({experiment_id},{server_id},{fl_round}, {self.client_id})"""
-            cursor.execute(operation=query)
-            connection.commit()
-            result = cursor.fetchone()
-
-            if result:
-                result = result[-1]
-            tries += 1
-            time.sleep(0.05)
+        #         if result:
+        #             result = result[-1]
+        #         tries += 1
+        #         time.sleep(0.05)
         # Return the Loss Metric, Number of Testing Examples, and Testing Metrics to be Sent to the Server.
         return loss, num_testing_examples, testing_metrics
 
