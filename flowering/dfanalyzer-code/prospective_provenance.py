@@ -255,7 +255,7 @@ tf9_output = Set(
         Attribute("loss", AttributeType.NUMERIC),
         Attribute("val_loss", AttributeType.NUMERIC),
         Attribute("val_accuracy", AttributeType.TEXT),
-        Attribute("local_weights", AttributeType.TEXT),
+        Attribute("loaded_weights_id", AttributeType.TEXT),
         Attribute("starting_time", AttributeType.TEXT),
         Attribute("ending_time", AttributeType.TEXT),
     ],
@@ -304,6 +304,8 @@ tf10_output = Set(
         Attribute("val_accuracy", AttributeType.NUMERIC),
         Attribute("val_loss", AttributeType.NUMERIC),
         Attribute("weights_mongo_id", AttributeType.TEXT),
+        Attribute("consistent", AttributeType.TEXT),
+        Attribute("loaded_weights", AttributeType.TEXT),
         Attribute("insertion_time", AttributeType.TEXT),
         Attribute("training_time", AttributeType.NUMERIC),
         Attribute("starting_time", AttributeType.TEXT),
@@ -687,6 +689,56 @@ while True:
             AND sta.client_loss = 'False');
         END;"""
         )
+
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION get_client_loss_between_rounds (_experiment_id int, _server_id int, _last_round int)
+        RETURNS int
+        BEGIN
+            RETURN
+           ( SELECT
+                COUNT(sta.server_round)
+            FROM 
+               oservertrainingaggregation sta
+            WHERE sta.experiment_id=_experiment_id 
+            AND sta.server_id = _server_id
+            AND sta.server_round > _last_round
+            AND sta.client_loss = 'True');
+        END;"""
+        )
+
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION get_last_round_load_checkpoint (_experiment_id int, _server_id int)
+        RETURNS int
+        BEGIN
+            RETURN
+           ( SELECT
+                MAX(sta.server_round)
+            FROM 
+               oservertrainingaggregation sta
+            WHERE sta.experiment_id=_experiment_id 
+            AND sta.server_id = _server_id
+            AND sta.loaded_weights = 'True');
+        END;"""
+        )
+
+        cursor.execute(
+            """
+        CREATE OR REPLACE FUNCTION get_last_round_write_checkpoint (_experiment_id int, _server_id int)
+        RETURNS int
+        BEGIN
+            RETURN
+           ( SELECT
+                MAX(sta.server_round)
+            FROM 
+               oservertrainingaggregation sta
+            WHERE sta.experiment_id=_experiment_id 
+            AND sta.server_id = _server_id
+            AND sta.weights_mongo_id is not null);
+        END;"""
+        )
+        
 
         cursor.execute(
             """

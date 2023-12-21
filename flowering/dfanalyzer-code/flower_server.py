@@ -386,7 +386,7 @@ class FlowerServer:
                 if pesos:
                     params = pickle.loads(pesos[0]["global_weights"])
                     message = "[Server {0} | FL Round {1}] Loaded Global Weights from Server {2} - round {3}.".format(
-                        self.get_attribute("experiment_id"),
+                        self.get_attribute("server_id"),
                         self.get_attribute("fl_round"),
                         self.server_id - 1,
                         pesos[0]["round"],
@@ -394,7 +394,7 @@ class FlowerServer:
                     self.log_message(message, "INFO")
                 else:
                     message = "[Server {0} | FL Round {1}] No Global Weights Found for Server {2}.".format(
-                        self.get_attribute("experiment_id"),
+                        self.get_attribute("server_id"),
                         self.get_attribute("fl_round"),
                         self.server_id - 1,
                     )
@@ -424,7 +424,7 @@ class FlowerServer:
         fit_config.update(training_hyper_parameters_settings)
         # Log the Initial Training Configuration (If Logger is Enabled for "DEBUG" Level).
         message = "[Server {0} | FL Round {1}] Initial Fit Config: {2}".format(
-            self.get_attribute("experiment_id"), fit_config["fl_round"], fit_config
+            self.get_attribute("server_id"), fit_config["fl_round"], fit_config
         )
         self.log_message(message, "DEBUG")
         return fit_config
@@ -435,7 +435,7 @@ class FlowerServer:
         evaluate_config.update(testing_hyper_parameters_settings)
         # Log the Initial Testing Configuration (If Logger is Enabled for "DEBUG" Level).
         message = "[Server {0} | FL Round {1}] Initial Evaluate Config: {2}".format(
-            self.get_attribute("experiment_id"),
+            self.get_attribute("server_id"),
             evaluate_config["fl_round"],
             evaluate_config,
         )
@@ -487,7 +487,7 @@ class FlowerServer:
         is_fl_round_eligible = choice([True, False])
         random_eligibility_end = perf_counter() - random_eligibility_start
         message = "[Server {0}] Finished Executing the Random Eligibility ({1}ing Phase) in {2} Seconds.".format(
-            self.get_attribute("experiment_id"), phase.capitalize(), random_eligibility_end
+            self.get_attribute("server_id"), phase.capitalize(), random_eligibility_end
         )
         self.log_message(message, "INFO")
         return is_fl_round_eligible
@@ -535,7 +535,7 @@ class FlowerServer:
         is_fl_round_eligible = True if query_result == 1 else False
         monetdb_eligibility_query_end = perf_counter() - monetdb_eligibility_query_start
         message = "[Server {0}] Finished Executing the MonetDB Eligibility Query ({1}ing Phase) in {2} Seconds.".format(
-            self.get_attribute("experiment_id"),
+            self.get_attribute("server_id"),
             phase.capitalize(),
             monetdb_eligibility_query_end,
         )
@@ -617,7 +617,7 @@ class FlowerServer:
             # Log the Dynamic Configuration Adjustment Notice (If Logger is Enabled for "INFO" Level).
             message = (
                 "[Server {0} | FL Round {1}] {2} Dynamically Adjusted (Eligible FL Round).".format(
-                    self.get_attribute("experiment_id"),
+                    self.get_attribute("server_id"),
                     self.get_attribute("fl_round"),
                     config_name,
                 )
@@ -649,7 +649,7 @@ class FlowerServer:
         self.set_attribute("fl_round", fl_round)
         # Log the Current FL Round (If Logger is Enabled for "INFO" Level).
         message = "[Server {0}] Current FL Round: {1}".format(
-            self.get_attribute("experiment_id"), self.get_attribute("fl_round")
+            self.get_attribute("server_id"), self.get_attribute("fl_round")
         )
         self.log_message(message, "INFO")
         # Get the Training Configuration.
@@ -667,7 +667,7 @@ class FlowerServer:
         self.set_attribute("fit_config", fit_config)
         # Log the Training Configuration (If Logger is Enabled for "DEBUG" Level).
         message = "[Server {0} | FL Round {1}] Fit Config: {2}".format(
-            self.get_attribute("experiment_id"), fit_config["fl_round"], fit_config
+            self.get_attribute("server_id"), fit_config["fl_round"], fit_config
         )
         self.log_message(message, "DEBUG")
         # Replace All Values of None Type to "None" String (Necessary Workaround on Flower v1.1.0).
@@ -758,7 +758,7 @@ class FlowerServer:
         self.set_attribute("fl_round", fl_round)
         # Log the Current FL Round (If Logger is Enabled for "INFO" Level).
         message = "[Server {0}] Current FL Round: {1}".format(
-            self.get_attribute("experiment_id"), self.get_attribute("fl_round")
+            self.get_attribute("server_id"), self.get_attribute("fl_round")
         )
         self.log_message(message, "INFO")
         # Get the Testing Configuration.
@@ -773,7 +773,7 @@ class FlowerServer:
         self.set_attribute("evaluate_config", evaluate_config)
         # Log the Testing Configuration (If Logger is Enabled for "DEBUG" Level).
         message = "[Server {0} | FL Round {1}] Evaluate Config: {2}".format(
-            self.get_attribute("experiment_id"),
+            self.get_attribute("server_id"),
             evaluate_config["fl_round"],
             evaluate_config,
         )
@@ -821,6 +821,15 @@ class FlowerServer:
 
         # Return the Testing Configuration to be Sent to All Participating Clients.
         return evaluate_config
+    
+    def save_checkpoint(self, payload):
+        starting_time = perf_counter()
+        db = self.get_connection_mongodb()
+        _id = db.checkpoints.insert_one(payload)
+        mongo_id = _id.inserted_id
+        insertion_time = perf_counter() - starting_time
+
+        return mongo_id, insertion_time
 
     def fit_metrics_aggregation_fn(
         self, training_metrics: List[Tuple[int, Metrics]]
@@ -862,7 +871,7 @@ class FlowerServer:
 
         # Log the Aggregated Training Metrics (If Logger is Enabled for "INFO" Level).
         message = "[Server {0} | FL Round {1} | {2}] Aggregated Training Metrics (Weighted Average): {3}".format(
-            self.get_attribute("experiment_id"),
+            self.get_attribute("server_id"),
             self.get_attribute("fl_round"),
             "".join(
                 [
@@ -882,47 +891,115 @@ class FlowerServer:
         client_loss = None
         mongo_id = None
         insertion_time = None
-        if (fl_round%int(self.checkpoints_settings["checkpoint_frequency"]) == 0):
-            message = f"Checking for client loss in round {fl_round}"
+
+        if total_num_clients < int(self.checkpoints_settings["min_clients_per_checkpoint"]):
+            client_loss = True
+        else:
+            client_loss = False
+        
+        result = None
+        connection = self.get_connection_monetdb()
+        cursor = connection.cursor()
+        checkpoint_frequency = int(self.checkpoints_settings["checkpoint_frequency"])
+        loaded_weights = False  
+        consistent = None  
+        if fl_round > 2 and self.checkpoints_settings["action"]=="rollback" and (fl_round%checkpoint_frequency == 0):
+            message = f"Checking for rollback in round {fl_round}"
             self.log_message(message, "INFO")
-            connection = self.get_connection_monetdb()
-            cursor = connection.cursor()
-            if fl_round > 1:
-                result = None
-                tries = 0
-                while not result:
-                    query = f"""SELECT check_if_last_round_is_already_recorded_fit({experiment_id}, {server_id}, {fl_round})"""
-                    cursor.execute(operation=query)
-                    result = cursor.fetchone()
-                    connection.commit()
+            if not client_loss:
+                query = f"""SELECT get_last_round_load_checkpoint({experiment_id}, {server_id});"""
+                cursor.execute(operation=query)
+                result = cursor.fetchone()
+                last_round_checkpoint = result[0] if result[0] else 1
+                query = f"""SELECT get_client_loss_between_rounds({experiment_id}, {server_id}, {last_round_checkpoint});"""
+                cursor.execute(operation=query)
+                client_loss_between_rounds = bool(cursor.fetchone()[0])
+                if client_loss_between_rounds: 
+                        db = self.get_connection_mongodb()
+                        # pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"experiment_id": {"$eq": experiment_id}}, {"server_id": {"$eq": server_id}}]})
+                        pesos = list(db.checkpoints.find({"$and": [{"experiment_id": {"$eq": experiment_id}}, {"server_id": {"$eq": server_id}, "consistent": {"$eq": True}}]}).sort([("round", -1)]).limit(1))
+                        if pesos: 
+                            # params = pickle.loads([p for p in pesos][0]["global_weights"])
+                            params = pickle.loads(pesos[0]["global_weights"])
 
-                    if result:
-                        result = result[-1]
-                    tries += 1
-                    time.sleep(0.05)
+                            message = f"ROLLBACK! Using weights from round {pesos[0]['round']} in round {fl_round}"
+                            self.log_message(message, "INFO")
+                            self.set_attribute(
+                                "global_model_parameters",
+                                params,
+                            )
+                            loaded_weights = True
 
-                if result:
-                    query = f"""SELECT check_client_loss_fit({experiment_id}, {server_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
-                    cursor.execute(operation=query)
-                    client_loss = bool(cursor.fetchone()[0])
+                        else:
+                            message = f"Couldn't find valid checkpoint for round {fl_round}"
+                            message = f"Inserting checkpoint for round {fl_round}"
+                            self.log_message(message, "INFO")
+                            consistent = False
+                            checkpoints = {
+                                "round": self.get_attribute("fl_round"),
+                                "experiment_id": self.get_attribute("experiment_id"),
+                                "server_id": self.get_attribute("server_id"),
+                                "global_weights": Binary(pickle.dumps(self.global_model_parameters, protocol=4)),
+                                "consistent": consistent
+                            }
+
+                            mongo_id, insertion_time = self.save_checkpoint(checkpoints)
+
+                else:
+                    message = f"Inserting consistent checkpoint for round {fl_round}"
+                    self.log_message(message, "INFO")
+                    consistent = True
+                    checkpoints = {
+                        "round": self.get_attribute("fl_round"),
+                        "experiment_id": self.get_attribute("experiment_id"),
+                        "server_id": self.get_attribute("server_id"),
+                        "global_weights": Binary(pickle.dumps(self.global_model_parameters, protocol=4)),
+                        "consistent": consistent
+                    }
+
+                    mongo_id, insertion_time = self.save_checkpoint(checkpoints)
+
+            else:
+                message = f"Client missing at round {self.fl_round}! Waiting return to execute rollback."
+                message = f"Inserting checkpoint for round {fl_round}"
+                consistent = False
+                self.log_message(message, "INFO")
+                checkpoints = {
+                    "round": self.get_attribute("fl_round"),
+                    "experiment_id": self.get_attribute("experiment_id"),
+                    "server_id": self.get_attribute("server_id"),
+                    "global_weights": Binary(pickle.dumps(self.global_model_parameters, protocol=4)),
+                    "consistent": consistent
+                }
+
+                mongo_id, insertion_time = self.save_checkpoint(checkpoints)
+
             cursor.close()
             connection.close()
 
-            message = f"Inserting checkpoint for round {fl_round}"
-            self.log_message(message, "INFO")
-            checkpoints = {
-                "round": self.get_attribute("fl_round"),
-                "experiment_id": self.get_attribute("experiment_id"),
-                "server_id": self.get_attribute("server_id"),
-                "global_weights": Binary(pickle.dumps(self.global_model_parameters, protocol=4)),
-            }
+        elif self.checkpoints_settings["action"]=="different_models" and (fl_round%checkpoint_frequency == 0):
+            query = f"""SELECT get_last_round_write_checkpoint({experiment_id}, {server_id});"""
+            cursor.execute(operation=query)
+            result = cursor.fetchone()
+            last_round_checkpoint = result[0] if result[0] else 1
+            query = f"""SELECT get_client_loss_between_rounds({experiment_id}, {server_id}, {last_round_checkpoint});"""
+            cursor.execute(operation=query)
+            client_loss_between_rounds = bool(cursor.fetchone()[0])
+            if not client_loss_between_rounds and not client_loss: 
+                consistent = True
+                message = f"Inserting checkpoint for round {fl_round}"
+                self.log_message(message, "INFO")
+                checkpoints = {
+                    "round": self.get_attribute("fl_round"),
+                    "experiment_id": self.get_attribute("experiment_id"),
+                    "server_id": self.get_attribute("server_id"),
+                    "global_weights": Binary(pickle.dumps(self.global_model_parameters, protocol=4)),
+                    "consistent": consistent
+                }
 
-            starting_time = perf_counter()
-            db = self.get_connection_mongodb()
-            _id = db.checkpoints.insert_one(checkpoints)
-            mongo_id = _id.inserted_id
-            insertion_time = perf_counter() - starting_time
-        
+                mongo_id, insertion_time = self.save_checkpoint(checkpoints)
+
+
         to_dfanalyzer = [
             self.get_attribute("experiment_id"),
             self.get_attribute("server_id"),
@@ -935,6 +1012,8 @@ class FlowerServer:
             aggregated_metrics["val_sparse_categorical_accuracy"],
             aggregated_metrics["val_loss"],
             mongo_id,
+            consistent,
+            loaded_weights,
             insertion_time,
             aggregated_metrics["fit_time"],
             starting_time,
@@ -944,59 +1023,6 @@ class FlowerServer:
         t10_output = DataSet("oServerTrainingAggregation", [Element(to_dfanalyzer)])
         t10.add_dataset(t10_output)
         t10.end()
-
-        result = None
-        connection = self.get_connection_monetdb()
-
-        if fl_round > 2 and self.checkpoints_settings["action"]=="rollback" and (fl_round%int(self.checkpoints_settings["checkpoint_frequency"]) == 0):
-            message = f"Checking for rollback in round {fl_round}"
-            self.log_message(message, "INFO")
-            while not result:
-                cursor = connection.cursor()
-                query = f"""SELECT check_server_recorded({experiment_id}, {server_id}, {fl_round});"""
-                cursor.execute(operation=query)
-                connection.commit()
-                result = cursor.fetchone()
-            
-                if result:
-                    result = result[0]
-                time.sleep(0.05)
-            connection = self.get_connection_monetdb()
-            cursor = connection.cursor()
-                        
-            query = f"""SELECT get_last_round_with_all_clients_fit({experiment_id}, {server_id})"""
-            cursor.execute(operation=query)
-            last_round = int(cursor.fetchone()[0])
-            if fl_round != (last_round):
-                # query = f"""SELECT check_client_loss_fit({experiment_id}, {fl_round}, { int(self.checkpoints_settings["min_clients_per_checkpoint"])})"""
-                # cursor.execute(operation=query)
-                # client_loss = bool(cursor.fetchone()[0])
-                
-                if not client_loss:
-                    db = self.get_connection_mongodb()
-                    # pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"experiment_id": {"$eq": experiment_id}}, {"server_id": {"$eq": server_id}}]})
-                    pesos = list(db.checkpoints.find({"$and": [{"experiment_id": {"$eq": experiment_id}}, {"server_id": {"$eq": server_id}}]}).sort([("round", -1)]).limit(1))
-                    if pesos: 
-                        # params = pickle.loads([p for p in pesos][0]["global_weights"])
-                        params = pickle.loads(pesos[0]["global_weights"])
-
-                        message = f"ROLLBACK! Using weights from round {pesos['round']} in round {fl_round}"
-                        self.log_message(message, "INFO")
-                        self.set_attribute(
-                            "global_model_parameters",
-                            params,
-                        )
-
-                    else:
-                        message = f"Couldn't find valid checkpoint for round {fl_round}"
-                        self.log_message(message, "INFO")
-                        last_round = None
-                else:
-                    message = f"Client missing at round {self.fl_round}! Waiting return to execute rollback."
-                    self.log_message(message, "INFO")
-
-            cursor.close()
-            connection.close()
 
         # Return the Aggregated Training Metrics.
         return aggregated_metrics
@@ -1042,7 +1068,7 @@ class FlowerServer:
 
         # Log the Aggregated Testing Metrics (If Logger is Enabled for "INFO" Level).
         message = "[Server {0} | FL Round {1} | {2}] Aggregated Testing Metrics (Weighted Average): {3}".format(
-            self.get_attribute("experiment_id"),
+            self.get_attribute("server_id"),
             self.get_attribute("fl_round"),
             "".join(
                 [

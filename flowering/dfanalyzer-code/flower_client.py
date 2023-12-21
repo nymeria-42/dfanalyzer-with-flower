@@ -124,6 +124,7 @@ class Client(NumPyClient):
                 connection.close()
 
         checkpoint_frequency = int(fit_config["checkpoint_frequency"])
+        mongo_id = None
         if fit_config["fl_round"] > 2 and fit_config["action"] == 'different_models':
 
             connection = connect(
@@ -162,12 +163,13 @@ class Client(NumPyClient):
                     connection.close()
                     if fit_config["fl_round"] != (last_round+1):
                         db = self.get_connection_mongodb(mongodb_settings["hostname"], mongodb_settings["port"])
-                        pesos = list(db.checkpoints.find({"$and": [{"experiment_id": {"$eq": experiment_id}}, {"server_id": {"$eq": server_id}}]}).sort([("round", -1)]).limit(1))
+                        pesos = list(db.checkpoints.find({"$and": [{"experiment_id": {"$eq": experiment_id}}, {"server_id": {"$eq": server_id}, "consistent": {"$eq": True}}]}).sort([("round", -1)]).limit(1))
                         if pesos:
                             params = pickle.loads(pesos[0]["global_weights"])
                             message = f"Loading client {self.client_id} with global weights from round {pesos[0]['round']}"
                             self.log_message(message, "INFO")
                             self.model.set_weights(params)
+                            mongo_id = pesos[0]["_id"]
                         else:
                             message = f"Couldn't find valid checkpoint for round {fit_config['fl_round']}"
                             self.log_message(message, "INFO")
@@ -262,8 +264,7 @@ class Client(NumPyClient):
             training_metrics["loss"],
             training_metrics.get("val_loss", None),
             training_metrics.get("val_sparse_categorical_accuracy", None),
-            # _id.inserted_id,
-            0,
+            mongo_id,
             starting_time,
             time.ctime(),
         ]
@@ -274,34 +275,34 @@ class Client(NumPyClient):
 
 
 
-        result = None
-        tries = 0
-        fl_round = fit_config["fl_round"]
-        experiment_id = fit_config["experiment_id"]
-        server_id = fit_config["server_id"]
-        checkpoint_frequency = int(fit_config["checkpoint_frequency"])
-        if (fl_round%checkpoint_frequency == 0):
-            connection = connect(
-                hostname=monetdb_settings["hostname"],
-                port=monetdb_settings["port"],
-                username=monetdb_settings["username"],
-                password=monetdb_settings["password"],
-                database=monetdb_settings["database"],
-            )
+        # result = None
+        # tries = 0
+        # fl_round = fit_config["fl_round"]
+        # experiment_id = fit_config["experiment_id"]
+        # server_id = fit_config["server_id"]
+        # checkpoint_frequency = int(fit_config["checkpoint_frequency"])
+        # if (fl_round%checkpoint_frequency == 0):
+        #     connection = connect(
+        #         hostname=monetdb_settings["hostname"],
+        #         port=monetdb_settings["port"],
+        #         username=monetdb_settings["username"],
+        #         password=monetdb_settings["password"],
+        #         database=monetdb_settings["database"],
+        #     )
 
-            cursor = connection.cursor()
-            message = f"Client {self.client_id} is waiting for round {fl_round} to be recorded"
-            self.log_message(message, "INFO")
-            while not result:
-                query = f"""SELECT check_if_last_round_is_recorded_fit_client({experiment_id}, {server_id}, {fl_round}, {self.client_id})"""
-                cursor.execute(operation=query)
-                connection.commit()
-                result = cursor.fetchone()
+        #     cursor = connection.cursor()
+        #     message = f"Client {self.client_id} is waiting for round {fl_round} to be recorded"
+        #     self.log_message(message, "INFO")
+        #     while not result:
+        #         query = f"""SELECT check_if_last_round_is_recorded_fit_client({experiment_id}, {server_id}, {fl_round}, {self.client_id})"""
+        #         cursor.execute(operation=query)
+        #         connection.commit()
+        #         result = cursor.fetchone()
                 
-                if result:
-                    result = result[-1]
-                tries += 1
-                time.sleep(0.05)
+        #         if result:
+        #             result = result[-1]
+        #         tries += 1
+        #         time.sleep(0.05)
 
         # Return the Model's Local Weights, Number of Training Examples, and Training Metrics to be Sent to the Server.
         return weight_tensors_list, num_training_examples, training_metrics
