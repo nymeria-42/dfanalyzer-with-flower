@@ -18,6 +18,14 @@ def fetch_data(table = 'oservertrainingaggregation'):
     return df
 
 tables = [
+    "iServerConfig",
+    "iLoadGlobalWeights",
+    "oLoadGlobalWeights",
+    "iDatasetLoad",
+    "iStrategy",
+    "iModelConfig", 
+    "iOptimizerConfig",
+    "iLossConfig",
     "oServerTrainingAggregation",
     "oClientTraining",
     "iTrainingConfig",
