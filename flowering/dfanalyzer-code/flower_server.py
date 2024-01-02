@@ -790,7 +790,7 @@ class FlowerServer:
         )
         t11.begin()
         attributes = ["batch_size", "steps"]
-        to_dfanalyzer = [self.get_attribute("experiment_id"), self.get_attribute("server_id")] + [evaluate_config.get(attr, 0) for attr in attributes]
+        to_dfanalyzer = [self.get_attribute("experiment_id"), self.get_attribute("server_id"), fl_round] + [evaluate_config.get(attr, 0) for attr in attributes]
 
         t11_input = DataSet("iEvaluationConfig", [Element(to_dfanalyzer)])
         t11.add_dataset(t11_input)

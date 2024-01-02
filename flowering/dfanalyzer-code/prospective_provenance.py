@@ -326,6 +326,7 @@ tf11_input = Set(
     [
         Attribute("experiment_id", AttributeType.NUMERIC),
         Attribute("server_id", AttributeType.NUMERIC),
+        Attribute("server_round", AttributeType.NUMERIC),
         Attribute("batch_size", AttributeType.NUMERIC),
         Attribute("steps", AttributeType.TEXT),
     ],
