@@ -999,6 +999,19 @@ class FlowerServer:
 
                 mongo_id, insertion_time = self.save_checkpoint(checkpoints)
 
+        elif (fl_round%checkpoint_frequency == 0):
+            consistent = None
+            message = f"Inserting checkpoint for round {fl_round}"
+            self.log_message(message, "INFO")
+            checkpoints = {
+                "round": self.get_attribute("fl_round"),
+                "experiment_id": self.get_attribute("experiment_id"),
+                "server_id": self.get_attribute("server_id"),
+                "global_weights": Binary(pickle.dumps(self.global_model_parameters, protocol=4)),
+                "consistent": consistent
+            }
+
+            mongo_id, insertion_time = self.save_checkpoint(checkpoints)
 
         to_dfanalyzer = [
             self.get_attribute("experiment_id"),
@@ -1321,6 +1334,7 @@ def main() -> None:
     # Load and Set Initial Global Model Parameters.
 
     initial_global_model_parameters = fs.load_initial_global_model_parameters()
+
 
     fs.set_attribute("initial_global_model_parameters", initial_global_model_parameters)
     # Load and Set Initial Fit Config.
