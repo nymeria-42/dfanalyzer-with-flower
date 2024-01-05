@@ -355,7 +355,7 @@ class FlowerServer:
             elif message_level == "CRITICAL":
                 logger.critical(msg=message)
 
-    def load_initial_global_model_parameters(self):
+    def load_initial_global_model_parameters(self, id_weights_mongo):
         """Server-side parameter initialization. A powerful mechanism which can be used, for example:
         \n - To resume the training from a previously saved checkpoint;
         \n - To implement hybrid approaches, such as to fine-tune a pre-trained model using federated learning.
@@ -402,7 +402,24 @@ class FlowerServer:
 
             cursor.close()
             connection.close()
-
+        if id_weights_mongo:
+            db = self.get_connection_mongodb()
+            pesos = db.checkpoints.find_one({"_id": {"$eq": id_weights_mongo}})
+            if pesos:
+                params = pickle.loads(pesos["global_weights"])
+                message = "[Server {0} | FL Round {1}] Loaded Global Weights from Server {2} - round {3}.".format(
+                    self.get_attribute("server_id"),
+                    self.get_attribute("fl_round"),
+                    pesos["server_id"],
+                    pesos["round"],
+                )
+                self.log_message(message, "INFO")
+            else:
+                message = "[Server {0} | FL Round {1}] No Global Weights Found.".format(
+                    self.get_attribute("server_id"),
+                    self.get_attribute("fl_round")
+                )
+                self.log_message(message, "INFO")
         ending_time = time.ctime()
         loading_parameters_end = perf_counter() - loading_parameters_start
 
@@ -1320,6 +1337,12 @@ def main() -> None:
         required=True,
         help="Server Config File (no default)",
     )
+    ag.add_argument(
+        "--id_weights_mongo",
+        type=str,
+        required=False,
+        default=None,
+    )
     parsed_args = ag.parse_args()
     # Get Flower Server Arguments.
     experiment_id = int(parsed_args.server_id)
@@ -1333,8 +1356,9 @@ def main() -> None:
     fs.set_attribute("logger", logger)
     # Load and Set Initial Global Model Parameters.
 
-    initial_global_model_parameters = fs.load_initial_global_model_parameters()
+    id_weights_mongo = parsed_args.id_weights_mongo
 
+    initial_global_model_parameters = fs.load_initial_global_model_parameters(id_weights_mongo)
 
     fs.set_attribute("initial_global_model_parameters", initial_global_model_parameters)
     # Load and Set Initial Fit Config.
