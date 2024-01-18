@@ -908,64 +908,82 @@ class FlowerServer:
         client_loss = None
         mongo_id = None
         insertion_time = None
-
-        if total_num_clients < int(self.checkpoints_settings["min_clients_per_checkpoint"]):
-            client_loss = True
-        else:
-            client_loss = False
-        
-        result = None
-        connection = self.get_connection_monetdb()
-        cursor = connection.cursor()
-        checkpoint_frequency = int(self.checkpoints_settings["checkpoint_frequency"])
         loaded_weights = False  
         consistent = None  
-        if fl_round > 2 and self.checkpoints_settings["action"]=="rollback" and (fl_round%checkpoint_frequency == 0):
-            message = f"Checking for rollback in round {fl_round}"
-            self.log_message(message, "INFO")
-            if not client_loss:
-                query = f"""SELECT get_last_round_load_checkpoint({experiment_id}, {server_id});"""
-                cursor.execute(operation=query)
-                result = cursor.fetchone()
-                last_round_checkpoint = result[0] if result[0] else 1
-                query = f"""SELECT get_client_loss_between_rounds({experiment_id}, {server_id}, {last_round_checkpoint});"""
-                cursor.execute(operation=query)
-                client_loss_between_rounds = bool(cursor.fetchone()[0])
-                if client_loss_between_rounds: 
-                        db = self.get_connection_mongodb()
-                        # pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"experiment_id": {"$eq": experiment_id}}, {"server_id": {"$eq": server_id}}]})
-                        pesos = list(db.checkpoints.find({"$and": [{"experiment_id": {"$eq": experiment_id}}, {"server_id": {"$eq": server_id}, "consistent": {"$eq": True}}]}).sort([("round", -1)]).limit(1))
-                        if pesos: 
-                            # params = pickle.loads([p for p in pesos][0]["global_weights"])
-                            params = pickle.loads(pesos[0]["global_weights"])
+        message = f"{self.checkpoints_settings['action']}, {type(self.checkpoints_settings['action'])}"
+        self.log_message(message, "INFO")
+        if self.checkpoints_settings["action"].lower().startswith("No"):
+            if total_num_clients < int(self.checkpoints_settings["min_clients_per_checkpoint"]):
+                client_loss = True
+            else:
+                client_loss = False
+            
+            result = None
+            connection = self.get_connection_monetdb()
+            cursor = connection.cursor()
+            checkpoint_frequency = int(self.checkpoints_settings["checkpoint_frequency"])
+            if fl_round > 2 and self.checkpoints_settings["action"]=="rollback" and (fl_round%checkpoint_frequency == 0):
+                message = f"Checking for rollback in round {fl_round}"
+                self.log_message(message, "INFO")
+                if not client_loss:
+                    query = f"""SELECT get_last_round_load_checkpoint({experiment_id}, {server_id});"""
+                    cursor.execute(operation=query)
+                    result = cursor.fetchone()
+                    last_round_checkpoint = result[0] if result[0] else 1
+                    query = f"""SELECT get_client_loss_between_rounds({experiment_id}, {server_id}, {last_round_checkpoint});"""
+                    cursor.execute(operation=query)
+                    client_loss_between_rounds = bool(cursor.fetchone()[0])
+                    if client_loss_between_rounds: 
+                            db = self.get_connection_mongodb()
+                            # pesos = db.checkpoints.find_one({"$and": [{"round": {"$eq": last_round}}, {"experiment_id": {"$eq": experiment_id}}, {"server_id": {"$eq": server_id}}]})
+                            pesos = list(db.checkpoints.find({"$and": [{"experiment_id": {"$eq": experiment_id}}, {"server_id": {"$eq": server_id}, "consistent": {"$eq": True}}]}).sort([("round", -1)]).limit(1))
+                            if pesos: 
+                                # params = pickle.loads([p for p in pesos][0]["global_weights"])
+                                params = pickle.loads(pesos[0]["global_weights"])
 
-                            message = f"ROLLBACK! Using weights from round {pesos[0]['round']} in round {fl_round}"
-                            self.log_message(message, "INFO")
-                            self.set_attribute(
-                                "global_model_parameters",
-                                params,
-                            )
-                            loaded_weights = True
+                                message = f"ROLLBACK! Using weights from round {pesos[0]['round']} in round {fl_round}"
+                                self.log_message(message, "INFO")
+                                self.set_attribute(
+                                    "global_model_parameters",
+                                    params,
+                                )
+                                loaded_weights = True
 
-                        else:
-                            message = f"Couldn't find valid checkpoint for round {fl_round}"
-                            message = f"Inserting checkpoint for round {fl_round}"
-                            self.log_message(message, "INFO")
-                            consistent = False
-                            checkpoints = {
-                                "round": self.get_attribute("fl_round"),
-                                "experiment_id": self.get_attribute("experiment_id"),
-                                "server_id": self.get_attribute("server_id"),
-                                "global_weights": Binary(pickle.dumps(self.global_model_parameters, protocol=4)),
-                                "consistent": consistent
-                            }
+                            else:
+                                message = f"Couldn't find valid checkpoint for round {fl_round}"
+                                self.log_message(message, "INFO")
+                                message = f"Inserting checkpoint for round {fl_round}"
+                                self.log_message(message, "INFO")
+                                consistent = False
+                                checkpoints = {
+                                    "round": self.get_attribute("fl_round"),
+                                    "experiment_id": self.get_attribute("experiment_id"),
+                                    "server_id": self.get_attribute("server_id"),
+                                    "global_weights": Binary(pickle.dumps(self.global_model_parameters, protocol=4)),
+                                    "consistent": consistent
+                                }
 
-                            mongo_id, insertion_time = self.save_checkpoint(checkpoints)
+                                mongo_id, insertion_time = self.save_checkpoint(checkpoints)
+
+                    else:
+                        message = f"Inserting consistent checkpoint for round {fl_round}"
+                        self.log_message(message, "INFO")
+                        consistent = True
+                        checkpoints = {
+                            "round": self.get_attribute("fl_round"),
+                            "experiment_id": self.get_attribute("experiment_id"),
+                            "server_id": self.get_attribute("server_id"),
+                            "global_weights": Binary(pickle.dumps(self.global_model_parameters, protocol=4)),
+                            "consistent": consistent
+                        }
+
+                        mongo_id, insertion_time = self.save_checkpoint(checkpoints)
 
                 else:
-                    message = f"Inserting consistent checkpoint for round {fl_round}"
+                    message = f"Client missing at round {self.fl_round}! Waiting return to execute rollback."
+                    message = f"Inserting checkpoint for round {fl_round}"
+                    consistent = False
                     self.log_message(message, "INFO")
-                    consistent = True
                     checkpoints = {
                         "round": self.get_attribute("fl_round"),
                         "experiment_id": self.get_attribute("experiment_id"),
@@ -976,10 +994,34 @@ class FlowerServer:
 
                     mongo_id, insertion_time = self.save_checkpoint(checkpoints)
 
-            else:
-                message = f"Client missing at round {self.fl_round}! Waiting return to execute rollback."
+                cursor.close()
+                connection.close()
+
+            elif self.checkpoints_settings["action"]=="different_models" and (fl_round%checkpoint_frequency == 0):
+                query = f"""SELECT get_last_round_write_checkpoint({experiment_id}, {server_id});"""
+                cursor.execute(operation=query)
+                result = cursor.fetchone()
+                last_round_checkpoint = result[0] if result[0] else 1
+                query = f"""SELECT get_client_loss_between_rounds({experiment_id}, {server_id}, {last_round_checkpoint});"""
+                cursor.execute(operation=query)
+                client_loss_between_rounds = bool(cursor.fetchone()[0])
+                if not client_loss_between_rounds and not client_loss: 
+                    consistent = True
+                    message = f"Inserting checkpoint for round {fl_round}"
+                    self.log_message(message, "INFO")
+                    checkpoints = {
+                        "round": self.get_attribute("fl_round"),
+                        "experiment_id": self.get_attribute("experiment_id"),
+                        "server_id": self.get_attribute("server_id"),
+                        "global_weights": Binary(pickle.dumps(self.global_model_parameters, protocol=4)),
+                        "consistent": consistent
+                    }
+
+                    mongo_id, insertion_time = self.save_checkpoint(checkpoints)
+
+            elif (fl_round%checkpoint_frequency == 0):
+                consistent = None
                 message = f"Inserting checkpoint for round {fl_round}"
-                consistent = False
                 self.log_message(message, "INFO")
                 checkpoints = {
                     "round": self.get_attribute("fl_round"),
@@ -990,46 +1032,7 @@ class FlowerServer:
                 }
 
                 mongo_id, insertion_time = self.save_checkpoint(checkpoints)
-
-            cursor.close()
-            connection.close()
-
-        elif self.checkpoints_settings["action"]=="different_models" and (fl_round%checkpoint_frequency == 0):
-            query = f"""SELECT get_last_round_write_checkpoint({experiment_id}, {server_id});"""
-            cursor.execute(operation=query)
-            result = cursor.fetchone()
-            last_round_checkpoint = result[0] if result[0] else 1
-            query = f"""SELECT get_client_loss_between_rounds({experiment_id}, {server_id}, {last_round_checkpoint});"""
-            cursor.execute(operation=query)
-            client_loss_between_rounds = bool(cursor.fetchone()[0])
-            if not client_loss_between_rounds and not client_loss: 
-                consistent = True
-                message = f"Inserting checkpoint for round {fl_round}"
-                self.log_message(message, "INFO")
-                checkpoints = {
-                    "round": self.get_attribute("fl_round"),
-                    "experiment_id": self.get_attribute("experiment_id"),
-                    "server_id": self.get_attribute("server_id"),
-                    "global_weights": Binary(pickle.dumps(self.global_model_parameters, protocol=4)),
-                    "consistent": consistent
-                }
-
-                mongo_id, insertion_time = self.save_checkpoint(checkpoints)
-
-        elif (fl_round%checkpoint_frequency == 0):
-            consistent = None
-            message = f"Inserting checkpoint for round {fl_round}"
-            self.log_message(message, "INFO")
-            checkpoints = {
-                "round": self.get_attribute("fl_round"),
-                "experiment_id": self.get_attribute("experiment_id"),
-                "server_id": self.get_attribute("server_id"),
-                "global_weights": Binary(pickle.dumps(self.global_model_parameters, protocol=4)),
-                "consistent": consistent
-            }
-
-            mongo_id, insertion_time = self.save_checkpoint(checkpoints)
-
+        
         to_dfanalyzer = [
             self.get_attribute("experiment_id"),
             self.get_attribute("server_id"),
