@@ -910,9 +910,8 @@ class FlowerServer:
         insertion_time = None
         loaded_weights = False  
         consistent = None  
-        message = f"{self.checkpoints_settings['action']}, {type(self.checkpoints_settings['action'])}"
-        self.log_message(message, "INFO")
-        if self.checkpoints_settings["action"].lower().startswith("No"):
+
+        if not self.checkpoints_settings["action"].lower().startswith("no"):
             if total_num_clients < int(self.checkpoints_settings["min_clients_per_checkpoint"]):
                 client_loss = True
             else:
