@@ -54,3 +54,10 @@ COPY (
     FROM
         oservertrainingaggregation)
 INTO 'insert_weights.csv' ON CLIENT USING DELIMITERS ',', '\n', '"';
+
+COPY (
+    SELECT
+        *
+    FROM
+        sys.storage)
+INTO 'storage_info.csv' ON CLIENT USING DELIMITERS ',', '\n', '"';
