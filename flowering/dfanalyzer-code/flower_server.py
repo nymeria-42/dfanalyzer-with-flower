@@ -910,8 +910,9 @@ class FlowerServer:
         insertion_time = None
         loaded_weights = False  
         consistent = None  
-
+        checkpoint_time = None
         if not self.checkpoints_settings["action"].lower().startswith("no"):
+            checkpoint_time_start = perf_counter()
             if total_num_clients < int(self.checkpoints_settings["min_clients_per_checkpoint"]):
                 client_loss = True
             else:
@@ -1031,6 +1032,8 @@ class FlowerServer:
                 }
 
                 mongo_id, insertion_time = self.save_checkpoint(checkpoints)
+
+            checkpoint_time = perf_counter() - checkpoint_time_start
         
         to_dfanalyzer = [
             self.get_attribute("experiment_id"),
@@ -1047,6 +1050,7 @@ class FlowerServer:
             consistent,
             loaded_weights,
             insertion_time,
+            checkpoint_time,
             aggregated_metrics["fit_time"],
             starting_time,
             time.ctime(),

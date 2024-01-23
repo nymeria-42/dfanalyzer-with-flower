@@ -307,6 +307,7 @@ tf10_output = Set(
         Attribute("consistent", AttributeType.TEXT),
         Attribute("loaded_weights", AttributeType.TEXT),
         Attribute("insertion_time", AttributeType.TEXT),
+        Attribute("checkpoint_time", AttributeType.TEXT),
         Attribute("training_time", AttributeType.NUMERIC),
         Attribute("starting_time", AttributeType.TEXT),
         Attribute("ending_time", AttributeType.TEXT),

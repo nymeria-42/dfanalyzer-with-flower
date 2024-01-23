@@ -50,7 +50,7 @@ INTO 'load_weights.csv' ON CLIENT USING DELIMITERS ',', '\n', '"';
 
 COPY (
     SELECT
-        server_id, server_round, weights_mongo_id, insertion_time
+        server_id, server_round, weights_mongo_id, insertion_time, checkpoint_time
     FROM
         oservertrainingaggregation)
 INTO 'insert_weights.csv' ON CLIENT USING DELIMITERS ',', '\n', '"';
