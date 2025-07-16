@@ -2,3 +2,4 @@ pymonetdb
 pymongo
 pillow
 pandas
+flwr==1.3.0
